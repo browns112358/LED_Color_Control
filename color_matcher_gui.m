@@ -27,7 +27,7 @@ function varargout = color_matcher_gui(varargin)
 
 % Edit the above text to modify the response to help color_matcher_gui
 
-% Last Modified by GUIDE v2.5 27-May-2014 15:16:07
+% Last Modified by GUIDE v2.5 02-Jun-2014 15:04:35
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -61,6 +61,11 @@ handles.output = hObject;
 handles.LED_active=[];
 handles.alpha=[];
 handles.match_active=[];
+
+handles.LED_pages=0;
+handles.LED_pagenum=0;
+set(handles.prev_page,'Enable','off') 
+set(handles.next_page,'Enable','off') 
 
 temp=[''];
 handles.matching_spectrum_names=cellstr(temp);
@@ -122,7 +127,7 @@ function LED1_toggle_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of LED1_toggle
-handles.LED_active(1)=get(hObject,'Value');
+handles.LED_active(1+handles.LED_pagenum*5)=get(hObject,'Value');
 
 if get(hObject,'Value')==1
     set(handles.LED1_slider,'Enable','on')
@@ -143,7 +148,7 @@ function LED1_text_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of LED1_text as text
 %        str2double(get(hObject,'String')) returns contents of LED1_text as a double
-handles.alpha(1)=str2double(get(hObject,'String'));
+handles.alpha(1+handles.LED_pagenum*5)=str2double(get(hObject,'String'));
 
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
@@ -168,10 +173,13 @@ function LED1_slider_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-handles.alpha(1)=get(hObject,'Value');
+handles.alpha(1+handles.LED_pagenum*5)=get(hObject,'Value');
 
+set(handles.LED1_slider,'enable','off');
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
+set(handles.LED1_slider,'enable','on');
+
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
@@ -324,9 +332,11 @@ function replot(hObject,eventdata,handles)
     cla reset
     
     hold on     
-    for n=1:size(handles.LED_data,2)  
+    c=0;
+    for n=(1+handles.LED_pagenum*5):min([size(handles.LED_data,2) 5+handles.LED_pagenum*5])
+        c=c+1;
         if handles.LED_active(n)==1
-            plot(handles.Wavelength,handles.LED_data(:,n),colors(n),'LineWidth',2)
+            plot(handles.Wavelength,handles.LED_data(:,n),colors(c),'LineWidth',2)
         end
     end
     title('LED Spectra')
@@ -362,49 +372,119 @@ function replot(hObject,eventdata,handles)
     hold off
 
 function refresh(hObject,eventdata,handles)
-    set(handles.matching_spectrum_popup,'string',handles.matching_spectrum_names)
-    set(handles.LED1_text,'string',num2str(handles.alpha(1)));
-    set(handles.LED1_slider,'value',handles.alpha(1));
-
-    set(handles.LED2_text,'string',num2str(handles.alpha(2)));
-    set(handles.LED2_slider,'value',handles.alpha(2));
-    
-    set(handles.LED3_text,'string',num2str(handles.alpha(3)));
-    set(handles.LED3_slider,'value',handles.alpha(3));
-    
-    set(handles.LED4_text,'string',num2str(handles.alpha(4)));
-    set(handles.LED4_slider,'value',handles.alpha(4));
-    
-    set(handles.LED5_text,'string',num2str(handles.alpha(5)));
-    set(handles.LED5_slider,'value',handles.alpha(5));    
-    
-    for n=1:size(handles.LED_active,2)
-        if n==1 && handles.LED_active(n)==1
-            set(handles.LED1_toggle,'Visible','on')
-            set(handles.LED1_text,'Visible','on')
-            set(handles.LED1_slider,'Visible','on')
-        end
-        if n==2 && handles.LED_active(n)==1
-            set(handles.LED2_toggle,'Visible','on')
-            set(handles.LED2_text,'Visible','on')
-            set(handles.LED2_slider,'Visible','on')
-        end
-        if n==3 && handles.LED_active(n)==1
-            set(handles.LED3_toggle,'Visible','on')
-            set(handles.LED3_text,'Visible','on')
-            set(handles.LED3_slider,'Visible','on')
-        end
-        if n==4 && handles.LED_active(n)==1
-            set(handles.LED4_toggle,'Visible','on')
-            set(handles.LED4_text,'Visible','on')
-            set(handles.LED4_slider,'Visible','on')
-        end
-        if n==5 && handles.LED_active(n)==1
-            set(handles.LED5_toggle,'Visible','on')
-            set(handles.LED5_text,'Visible','on')
-            set(handles.LED5_slider,'Visible','on')
-        end
+    if size(handles.LED_data,2) > 5
+        handles.LED_pages=handles.LED_pages+1;
     end
+    
+    if handles.LED_pagenum <= 0
+        set(handles.prev_page,'Enable','off') 
+    else
+        set(handles.prev_page,'Enable','on')         
+    end
+
+    if size(handles.LED_data,2) < 1+(handles.LED_pagenum+1)*5
+       set(handles.next_page,'Enable','off') 
+    else
+       set(handles.next_page,'Enable','on')         
+    end    
+    
+    set(handles.LED1_toggle,'string',strcat('LED',num2str(1+handles.LED_pagenum*5)))  
+    set(handles.LED2_toggle,'string',strcat('LED',num2str(2+handles.LED_pagenum*5)))
+    set(handles.LED3_toggle,'string',strcat('LED',num2str(3+handles.LED_pagenum*5)))
+    set(handles.LED4_toggle,'string',strcat('LED',num2str(4+handles.LED_pagenum*5)))        
+    set(handles.LED5_toggle,'string',strcat('LED',num2str(5+handles.LED_pagenum*5)))
+    
+    set(handles.matching_spectrum_popup,'string',handles.matching_spectrum_names)
+    
+    a=size(handles.alpha,2)-mod(size(handles.alpha,2),5);
+    b=mod(size(handles.alpha,2),5);
+    
+    if size(handles.alpha,2) >= 1+handles.LED_pagenum*5
+        set(handles.LED1_toggle,'Visible','on')
+        set(handles.LED1_text,'Visible','on')
+        set(handles.LED1_slider,'Visible','on')        
+        set(handles.LED1_text,'string',num2str(handles.alpha(1+handles.LED_pagenum*5)));
+        set(handles.LED1_slider,'value',handles.alpha(1+handles.LED_pagenum*5));
+    else
+        set(handles.LED1_toggle,'Visible','off')
+        set(handles.LED1_text,'Visible','off')
+        set(handles.LED1_slider,'Visible','off')
+    end
+
+    if size(handles.alpha,2) >= 2+handles.LED_pagenum*5
+        set(handles.LED2_toggle,'Visible','on')
+        set(handles.LED2_text,'Visible','on')
+        set(handles.LED2_slider,'Visible','on')        
+        set(handles.LED2_text,'string',num2str(handles.alpha(2+handles.LED_pagenum*5)));
+        set(handles.LED2_slider,'value',handles.alpha(2+handles.LED_pagenum*5));
+    else
+        set(handles.LED2_toggle,'Visible','off')
+        set(handles.LED2_text,'Visible','off')
+        set(handles.LED2_slider,'Visible','off')
+    end 
+    
+    if size(handles.alpha,2) >= 3+handles.LED_pagenum*5
+        set(handles.LED3_toggle,'Visible','on')
+        set(handles.LED3_text,'Visible','on')
+        set(handles.LED3_slider,'Visible','on')        
+        set(handles.LED3_text,'string',num2str(handles.alpha(3+handles.LED_pagenum*5)));
+        set(handles.LED3_slider,'value',handles.alpha(3+handles.LED_pagenum*5));
+    else
+        set(handles.LED3_toggle,'Visible','off')
+        set(handles.LED3_text,'Visible','off')
+        set(handles.LED3_slider,'Visible','off')
+    end    
+    
+    if size(handles.alpha,2) >= 4+handles.LED_pagenum*5
+        set(handles.LED4_toggle,'Visible','on')
+        set(handles.LED4_text,'Visible','on')
+        set(handles.LED4_slider,'Visible','on')        
+        set(handles.LED4_text,'string',num2str(handles.alpha(4+handles.LED_pagenum*5)));
+        set(handles.LED4_slider,'value',handles.alpha(4+handles.LED_pagenum*5));
+    else
+        set(handles.LED4_toggle,'Visible','off')
+        set(handles.LED4_text,'Visible','off')
+        set(handles.LED4_slider,'Visible','off')
+    end  
+    
+    if size(handles.alpha,2) >= 5+handles.LED_pagenum*5
+        set(handles.LED5_toggle,'Visible','on')
+        set(handles.LED5_text,'Visible','on')
+        set(handles.LED5_slider,'Visible','on')        
+        set(handles.LED5_text,'string',num2str(handles.alpha(5+handles.LED_pagenum*5)));
+        set(handles.LED5_slider,'value',handles.alpha(5+handles.LED_pagenum*5));
+    else
+        set(handles.LED5_toggle,'Visible','off')
+        set(handles.LED5_text,'Visible','off')
+        set(handles.LED5_slider,'Visible','off')
+    end    
+%     for n=1:size(handles.LED_active,2)
+%         if n==1 && handles.LED_active(n)==1
+%             set(handles.LED1_toggle,'Visible','on')
+%             set(handles.LED1_text,'Visible','on')
+%             set(handles.LED1_slider,'Visible','on')
+%         end
+%         if n==2 && handles.LED_active(n)==1
+%             set(handles.LED2_toggle,'Visible','on')
+%             set(handles.LED2_text,'Visible','on')
+%             set(handles.LED2_slider,'Visible','on')
+%         end
+%         if n==3 && handles.LED_active(n)==1
+%             set(handles.LED3_toggle,'Visible','on')
+%             set(handles.LED3_text,'Visible','on')
+%             set(handles.LED3_slider,'Visible','on')
+%         end
+%         if n==4 && handles.LED_active(n)==1
+%             set(handles.LED4_toggle,'Visible','on')
+%             set(handles.LED4_text,'Visible','on')
+%             set(handles.LED4_slider,'Visible','on')
+%         end
+%         if n==5 && handles.LED_active(n)==1
+%             set(handles.LED5_toggle,'Visible','on')
+%             set(handles.LED5_text,'Visible','on')
+%             set(handles.LED5_slider,'Visible','on')
+%         end
+%    end
 
 
 % --- Executes on button press in LED2_toggle.
@@ -412,7 +492,7 @@ function LED2_toggle_Callback(hObject, eventdata, handles)
 % hObject    handle to LED2_toggle (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.LED_active(2)=get(hObject,'Value');
+handles.LED_active(2+handles.LED_pagenum*5)=get(hObject,'Value');
 
 if get(hObject,'Value')==1
     set(handles.LED2_slider,'Enable','on')
@@ -433,7 +513,7 @@ function LED2_text_Callback(hObject, eventdata, handles)
 % hObject    handle to LED2_text (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(2)=str2double(get(hObject,'String'));
+handles.alpha(2+handles.LED_pagenum*5)=str2double(get(hObject,'String'));
 
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
@@ -460,10 +540,13 @@ function LED2_slider_Callback(hObject, eventdata, handles)
 % hObject    handle to LED2_slider (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(2)=get(hObject,'Value');
+handles.alpha(2+handles.LED_pagenum*5)=get(hObject,'Value');
 
+set(handles.LED2_slider,'enable','off');
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
+set(handles.LED2_slider,'enable','on');
+
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
@@ -486,7 +569,7 @@ function LED3_toggle_Callback(hObject, eventdata, handles)
 % hObject    handle to LED3_toggle (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.LED_active(3)=get(hObject,'Value');
+handles.LED_active(3+handles.LED_pagenum*5)=get(hObject,'Value');
 if get(hObject,'Value')==1
     set(handles.LED3_slider,'Enable','on')
     set(handles.LED3_text,'Enable','on')
@@ -505,7 +588,7 @@ function LED3_text_Callback(hObject, eventdata, handles)
 % hObject    handle to LED3_text (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(3)=str2double(get(hObject,'String'));
+handles.alpha(3+handles.LED_pagenum*5)=str2double(get(hObject,'String'));
 
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
@@ -532,10 +615,13 @@ function LED3_slider_Callback(hObject, eventdata, handles)
 % hObject    handle to LED3_slider (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(3)=get(hObject,'Value');
+handles.alpha(3+handles.LED_pagenum*5)=get(hObject,'Value');
 
+set(handles.LED3_slider,'enable','off');
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
+set(handles.LED3_slider,'enable','on');
+
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
@@ -558,7 +644,7 @@ function LED4_toggle_Callback(hObject, eventdata, handles)
 % hObject    handle to LED4_toggle (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.LED_active(4)=get(hObject,'Value');
+handles.LED_active(4+handles.LED_pagenum*5)=get(hObject,'Value');
 if get(hObject,'Value')==1
     set(handles.LED4_slider,'Enable','on')
     set(handles.LED4_text,'Enable','on')
@@ -577,7 +663,7 @@ function LED4_text_Callback(hObject, eventdata, handles)
 % hObject    handle to LED4_text (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(4)=str2double(get(hObject,'String'));
+handles.alpha(4+handles.LED_pagenum*5)=str2double(get(hObject,'String'));
 
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
@@ -604,10 +690,13 @@ function LED4_slider_Callback(hObject, eventdata, handles)
 % hObject    handle to LED4_slider (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(4)=get(hObject,'Value');
+handles.alpha(4+handles.LED_pagenum*5)=get(hObject,'Value');
 
+set(handles.LED4_slider,'enable','off');
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
+set(handles.LED4_slider,'enable','on');
+
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
@@ -630,7 +719,7 @@ function LED5_toggle_Callback(hObject, eventdata, handles)
 % hObject    handle to LED5_toggle (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.LED_active(5)=get(hObject,'Value');
+handles.LED_active(5+handles.LED_pagenum*5)=get(hObject,'Value');
 if get(hObject,'Value')==1
     set(handles.LED5_slider,'Enable','on')
     set(handles.LED5_text,'Enable','on')
@@ -649,7 +738,7 @@ function LED5_text_Callback(hObject, eventdata, handles)
 % hObject    handle to LED5_text (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(5)=str2double(get(hObject,'String'));
+handles.alpha(5+handles.LED_pagenum*5)=str2double(get(hObject,'String'));
 
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
@@ -676,10 +765,13 @@ function LED5_slider_Callback(hObject, eventdata, handles)
 % hObject    handle to LED5_slider (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.alpha(5)=get(hObject,'Value');
+handles.alpha(5+handles.LED_pagenum*5)=get(hObject,'Value');
 
+set(handles.LED5_slider,'enable','off');
 refresh(hObject,eventdata,handles);
 replot(hObject,eventdata,handles);
+set(handles.LED5_slider,'enable','on');
+
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
@@ -695,3 +787,27 @@ function LED5_slider_CreateFcn(hObject, eventdata, handles)
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
+
+
+% --- Executes on button press in prev_page.
+function prev_page_Callback(hObject, eventdata, handles)
+% hObject    handle to prev_page (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles.LED_pagenum=handles.LED_pagenum-1;
+
+refresh(hObject,eventdata,handles);
+replot(hObject,eventdata,handles);
+
+guidata(hObject, handles);
+% --- Executes on button press in next_page.
+function next_page_Callback(hObject, eventdata, handles)
+% hObject    handle to next_page (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles.LED_pagenum=handles.LED_pagenum+1;
+
+refresh(hObject,eventdata,handles);
+replot(hObject,eventdata,handles);
+
+guidata(hObject, handles);
