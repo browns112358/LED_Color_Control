@@ -527,9 +527,8 @@ if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1 && handles.ma
 %     %index=find(handles.match_active)
 %     s=handles.match_data(:,handles.match_active==1);
 %     alpha_temp=lsqnonneg(R,s);
-
-%     options = optimoptions('fmincon','GradObj','off');
-%     [x,fval]=fmincon('objfun',x0,[],[],[],[],[0 0 0 0 0],[100 100 100 100 100]);
+    options = optimoptions('fmincon','GradObj','off');
+    [x,fval]=fmincon('objfun',x0,[],[],[],[],[.1 .1 .1 .1 .1],[100 100 100 100 100]);
     i=1;
     for n=1:size(handles.LED_active,2)
         if handles.LED_active(n)==1
