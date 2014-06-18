@@ -27,7 +27,7 @@ function varargout = color_matcher_gui(varargin)
 
 % Edit the above text to modify the response to help color_matcher_gui
 
-% Last Modified by GUIDE v2.5 09-Jun-2014 15:47:50
+% Last Modified by GUIDE v2.5 16-Jun-2014 15:03:27
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -58,7 +58,7 @@ function color_matcher_gui_OpeningFcn(hObject, eventdata, handles, varargin)
 % varargin   command line arguments to color_matcher_gui (see VARARGIN)
 % Choose default command line output for color_matcher_gui
 
-handles.xyY_bg=imread('xyYaxes3.png');
+handles.xyY_bg=imread('xyYaxes.png');
 handles.xyY_bg=flipdim(handles.xyY_bg,1);
 
 handles.LUV_bg=imread('LUVaxes2.png');
@@ -71,6 +71,7 @@ handles.UVW_bg=imread('xyYaxes3.png');
 handles.UVW_bg=flipdim(handles.LUV_bg,1);
 
 handles.CIE_space='xyY';
+handles.slider_holding=0;
 
 handles.output = hObject;
 handles.LED_active=[];
@@ -86,19 +87,20 @@ set(handles.optimize_coefficients,'Enable','off')
 
 temp=[''];
 handles.matching_spectrum_names=cellstr(temp);
+handles.clean=1;
 
 options=cellstr([
     'Least-Squares Spectrum Match';
     'CCT Match                   ';
-    'Maximized CRI               ']);
+    'Maximized CRI               ';
+    'Color Difference            ']);
 set(handles.optimize_options,'string',options);
 handles.optimize_type='Least-Squares Spectrum Match';
 
-handles.clean=1;
 handles.match_data=[];
 handles.LED_data=[];
 
-handles.Wavelength=350:.5:850;
+handles.Wavelength=380:.5:780;
 
 cmf=importdata('xyz_cmf.txt');
 xcmf=spline(cmf(:,1),cmf(:,2),handles.Wavelength);
@@ -125,8 +127,79 @@ handles.Z=[0 0];
 handles.x=[0 0];
 handles.y=[0 0];
 
-handles.u=[0 0];
-handles.v=[0 0];
+handles.LUV_u=[0 0];
+handles.LUV_v=[0 0];
+
+handles.UVW_u=[0 0];
+handles.UVW_v=[0 0];
+
+handles.W=[0 0];
+
+handles.Lab_L=[0 0];
+handles.a=[0 0];
+handles.b=[0 0];
+
+handles.illuminant_names=cellstr([
+    'A  ';
+    'D50';
+    'D55';
+    'D65';
+    'D75';
+    'E  ';
+    'F1 ';
+    'F2 ';
+    'F3 ';
+    'F4 ';
+    'F5 ';
+    'F6 ';
+    'F7 ';
+    'F8 ';
+    'F9 ';
+    'F10';
+    'F11';
+    'F12';]);
+handles.standard_illuminant=[0.44757 0.40745];
+
+set(handles.reference_illuminant_popup,'string',handles.illuminant_names);
+handles.illuminant_data_2deg=[
+    0.44757 0.40745;
+    0.34567	0.35850;
+    0.33242	0.34743;
+    0.31271	0.32902;
+    0.29902	0.31485;
+    0.33333 0.33333;
+    0.31310	0.33727;
+    0.37208	0.37529;
+    0.40910	0.39430;
+    0.44018	0.40329;
+    0.31379	0.34531;
+    0.37790	0.38835;
+    0.31292	0.32933;
+    0.34588	0.35875;
+    0.37417	0.37281;
+    0.34609	0.35986;
+    0.38052	0.37713;
+    0.43695	0.40441;];
+
+handles.illuminant_data_10deg=[
+    0.45117	0.40594;
+    0.34773	0.35952;
+    0.33411	0.34877;
+    0.31382	0.33100;
+    0.29968	0.31740;
+    0.33333 0.33333;
+    0.31811	0.33559;
+    0.37925	0.36733;
+    0.41761	0.38324;
+    0.44920	0.39074;
+    0.31975	0.34246;
+    0.38660	0.37847;
+    0.31569	0.32960;
+    0.34902	0.35939;
+    0.37829	0.37045;
+    0.35090	0.35444;
+    0.38541	0.37123;
+    0.44256	0.39717;];
 
 set(handles.matching_spectrum_popup,'Enable','off')
 set(handles.LED1_toggle,'Value',1);
@@ -137,6 +210,10 @@ set(handles.LED5_toggle,'Value',1);
 
 set(handles.range1,'Value',1);
 handles.max_alpha=1;
+
+handles.normalize=0;
+%set(handles.range1,'Visible','off')
+%set(handles.range2,'Visible','off')
 
 set(handles.LED1_toggle,'Visible','off')
 set(handles.LED1_text,'Visible','off')
@@ -223,7 +300,7 @@ handles.a3=axes('Units','normalized',...
                 'Color',handles.unselectedTabColor,...
                 'Position',[pos3(1) pos3(2) pos3(3) pos3(4)+0.01],...
                 'ButtonDownFcn','color_matcher_gui(''a3bd'',gcbo,[],guidata(gcbo))');
-handles.t3=text('String','Background',...
+handles.t3=text('String','LED Design',...
                 'Units','normalized',...
                 'Position',[pos3(3)/2,pos3(2)/2+pos3(4)],...
                 'HorizontalAlignment','left',...
@@ -283,6 +360,9 @@ set(handles.a3,'Color',handles.unselectedTabColor)
 set(handles.tab2Panel,'Visible','on')
 set(handles.tab1Panel,'Visible','off')
 set(handles.tab3Panel,'Visible','off')
+
+handles=replot_color_space(hObject,eventdata,handles);
+guidata(hObject, handles);
 
 % Text object 3 callback (tab 3)
 function t3bd(hObject,eventdata,handles)
@@ -352,6 +432,7 @@ handles.LED_active(1+handles.LED_pagenum*5)=get(hObject,'Value');
 %     set(handles.LED1_slider,'Enable','off')  
 %     set(handles.LED1_text,'Enable','off')    
 % end
+
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 guidata(hObject, handles);
@@ -391,10 +472,13 @@ function LED1_slider_Callback(hObject, eventdata, handles)
 
 handles.alpha(1+handles.LED_pagenum*5)=get(hObject,'Value');
 
-set(handles.LED1_slider,'enable','off');
+handles.slider_holding=1;
+set(handles.LED1_slider,'enable','off')
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
-set(handles.LED1_slider,'enable','on');
+set(handles.LED1_slider,'enable','on')
+handles.slider_holding=0;
+%set(handles.LED1_slider,'enable','off');
 
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
@@ -426,17 +510,30 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
     FileNameString=fullfile(pathname, filename); %Same as FullFileName
     InputData=importdata(FileNameString);
     tempWave=InputData(:,1);
-
+    
     for n=2:size(InputData,2)
         handles.LED_active(end+1)=1;
         handles.alpha(end+1)=1;
         data=spline(tempWave,InputData(:,n),handles.Wavelength);
-
         data(handles.Wavelength < min(tempWave))=0;
         data(handles.Wavelength > max(tempWave))=0;
 
+        if handles.normalize==1
+            data=(data-min(data)) ./ (max(data)-min(data));
+        end
+        if handles.normalize==2
+            data=data/(data(handles.Wavelength==560)); 
+        end
+        if handles.normalize==3
+            data=data/sum(data); 
+        end
+        
         handles.LED_data=[handles.LED_data data'];
 
+    end
+    
+    if size(handles.LED_active(handles.LED_active==1),2) >= 1 && size(handles.match_active(handles.match_active==1),2)==1
+        set(handles.optimize_coefficients,'Enable','on') 
     end
 end
 handles=refresh(hObject,eventdata,handles);
@@ -456,20 +553,22 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
     InputData=importdata(FileNameString);
     tempWave=InputData(:,1);
 
-    set(handles.matching_spectrum_popup,'Enable','on')
-    
-    if handles.clean == 1
-        handles.matching_spectrum_names(:,1)=[];
-        set(handles.optimize_coefficients,'Enable','on') 
+    if size(handles.match_active,2)==0
+        set(handles.matching_spectrum_popup,'Enable','on')
     end
 
+    if handles.clean==1
+        handles.matching_spectrum_names(:,1)=[];
+        handles.clean=0;
+    end
+    
     for n=2:size(InputData,2)
         if size(InputData,2) <= 2
             handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=filename;
         else
             handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=strcat(filename,'---',num2str(n-1));
         end
-        if handles.clean==1 && n==2
+        if size(handles.match_active,2)==0 && n==2
             handles.match_active(end+1)=1;
         else
             handles.match_active(end+1)=0;            
@@ -478,11 +577,23 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
 
         data(handles.Wavelength < min(tempWave))=0;
         data(handles.Wavelength > max(tempWave))=0;
-
+        
+        if handles.normalize==1
+            data=(data-min(data)) ./ (max(data)-min(data));
+        end
+        if handles.normalize==2
+            data=data/(data(handles.Wavelength==560)); 
+        end
+        if handles.normalize==3
+            data=data/sum(data); 
+        end
+        
         handles.match_data=[handles.match_data data'];
     end
-    hold off    
-    handles.clean=0;
+    
+    if size(handles.LED_active(handles.LED_active==1),2) >= 1 && size(handles.match_active(handles.match_active==1),2)==1
+        set(handles.optimize_coefficients,'Enable','on') 
+    end
 
 end
 handles=refresh(hObject,eventdata,handles);
@@ -495,7 +606,6 @@ function Untitled_1_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-
 function [f] = objfun(x)
     R=[];
     for n=1:size(handles.LED_data,2)
@@ -506,30 +616,28 @@ function [f] = objfun(x)
     s=handles.match_data(:,handles.match_active==1);
     f=sum((s-x(1)*R(:,1)-x(2)*R(:,2)-x(3)*R(:,3)-x(4)*R(:,4)-x(5)*R(:,5)).^2);
 
-
-
 % --- Executes on button press in optimize_coefficients.
 function optimize_coefficients_Callback(hObject, eventdata, handles)
 % hObject    handle to optimize_coefficients (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1 && handles.max_alpha==1
-    
-end
-if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1 && handles.max_alpha==100
-%     R=[];
-%     for n=1:size(handles.LED_data,2)
-%         if handles.LED_active(n)==1
-%             R=[R handles.LED_data(:,n)];
-%         end
-%     end
-%     %index=find(handles.match_active)
-%     s=handles.match_data(:,handles.match_active==1);
-%     alpha_temp=lsqnonneg(R,s);
+if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1
+    R=[];
+    for n=1:size(handles.LED_data,2)
+        if handles.LED_active(n)==1
+            R=[R handles.LED_data(:,n)];
+        end
+    end
+    s=handles.match_data(:,handles.match_active==1);
 
-%     options = optimoptions('fmincon','GradObj','off');
-%     [x,fval]=fmincon('objfun',x0,[],[],[],[],[0 0 0 0 0],[100 100 100 100 100]);
+    lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
+    ub=ones(1,size(handles.LED_active(handles.LED_active==1),2));
+    ub=ub.*handles.max_alpha;
+
+    options = optimoptions('lsqlin','Display','off');
+    alpha_temp=lsqlin(R,s,[],[],[],[],lb,ub,[],options);
+    
     i=1;
     for n=1:size(handles.LED_active,2)
         if handles.LED_active(n)==1
@@ -610,12 +718,14 @@ function [handles]=replot(hObject,eventdata,handles)
     axes(handles.Matching_plot)
     cla reset
     
-    hold on     
-    for n=1:size(handles.match_data,2)  
-        if handles.match_active(n)==1
-            plot(handles.Wavelength,handles.match_data(:,n),'k','LineWidth',2)
+    hold on
+%    if size(handles.match_data,2) >= 1
+        for n=1:size(handles.match_data,2)  
+            if handles.match_active(n)==1
+                plot(handles.Wavelength,handles.match_data(:,n),'k','LineWidth',2)
+            end
         end
-    end
+%    end
     alpha_applied=ones(size(handles.Wavelength,2),size(handles.alpha,2));
     for n=1:size(handles.alpha,2)
         if handles.LED_active(n)==1
@@ -633,6 +743,7 @@ function [handles]=replot(hObject,eventdata,handles)
     xlim([min(handles.Wavelength) max(handles.Wavelength)])
     hold off
     
+function [handles]=replot_color_space(hObject,eventdata,handles)    
 if strcmp(handles.CIE_space,'xyY')==1
     set(handles.xyY_plot,'Visible','On')
     set(handles.LUV_plot,'Visible','Off')
@@ -668,8 +779,8 @@ if strcmp(handles.CIE_space,'LUV')==1
     imagesc([0 .63],[0 .6],handles.LUV_bg)
     xlim([0 .63])
     ylim([0 .6])
-    scatter(handles.u(1),handles.v(1),70,'k','fill')
-    scatter(handles.u(2),handles.v(2),70,'k','v','fill')
+    scatter(handles.LUV_u(1),handles.LUV_v(1),70,'k','fill')
+    scatter(handles.LUV_u(2),handles.LUV_v(2),70,'k','v','fill')
     
     legend('Ideal','Generated')
     xlabel('u')
@@ -698,8 +809,6 @@ if strcmp(handles.CIE_space,'UVW')==1
     cla reset
 
 end
-    
-    
 
 function [handles]=refresh(hObject,eventdata,handles)
 
@@ -729,8 +838,46 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.x(1)=handles.X(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
         handles.y(1)=handles.Y(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
 
-        handles.u(1)=4*handles.X(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));
-        handles.v(1)=9*handles.Y(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));        
+        handles.LUV_u(1)=4*handles.X(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));
+        handles.LUV_v(1)=9*handles.Y(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));
+        
+        standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+        standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+
+        handles.W(1)=25*(handles.Y(1)).^(1/3)-17;
+        handles.UVW_u(1)=13*handles.W(1).*(handles.LUV_u(1)-standard_u);
+        handles.UVW_v(1)=13*handles.W(1).*(handles.LUV_v(1)-standard_v);
+
+        ref_Y=100;
+        ref_X=handles.standard_illuminant(1)*ref_Y/handles.standard_illuminant(2);
+        ref_Z=handles.standard_illuminant(2)*ref_Y/(1-handles.standard_illuminant(1)-handles.standard_illuminant(2));
+        
+        ratio1=handles.X(1)/ref_X;
+        ratio2=handles.Y(1)/ref_Y;
+        ratio3=handles.Z(1)/ref_Z;
+        
+        if ratio1 > .008856
+            f1=ratio1^(1/3);
+        else
+            f1=7.787*ratio1+.13793;
+        end
+        
+        if ratio2 > .008856
+            f2=ratio2^(1/3);
+        else
+            f2=7.787*ratio2+.13793;
+        end
+        
+        if ratio3 > .008856
+            f3=ratio3^(1/3);
+        else
+            f3=7.787*ratio3+.13793;
+        end
+
+        handles.Lab_L(1)=116*f2-16;
+        handles.a(1)=500*(f1-f2);
+        handles.b(1)=200*(f2-f3);
+        
     end
     
     if size(handles.LED_data) >= 1
@@ -752,8 +899,45 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.x(2)=handles.X(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
         handles.y(2)=handles.Y(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
 
-        handles.u(2)=4*handles.X(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));
-        handles.v(2)=9*handles.Y(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));       
+        handles.LUV_u(2)=4*handles.X(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));
+        handles.LUV_v(2)=9*handles.Y(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));
+        
+        standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+        standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+
+        handles.W(2)=25*(handles.Y(2)).^(1/3)-17;
+        handles.UVW_u(2)=13*handles.W(2).*(handles.LUV_u(2)-standard_u);
+        handles.UVW_v(2)=13*handles.W(2).*(handles.LUV_v(2)-standard_v);
+        
+        ref_Y=100;
+        ref_X=handles.standard_illuminant(1)*ref_Y/handles.standard_illuminant(2);
+        ref_Z=handles.standard_illuminant(2)*ref_Y/(1-handles.standard_illuminant(1)-handles.standard_illuminant(2));
+        
+        ratio1=handles.X(2)/ref_X;
+        ratio2=handles.Y(2)/ref_Y;
+        ratio3=handles.Z(2)/ref_Z;
+        
+        if ratio1 > .008856
+            f1=ratio1^(1/3);
+        else
+            f1=7.787*ratio1+.13793;
+        end
+        
+        if ratio2 > .008856
+            f2=ratio2^(1/3);
+        else
+            f2=7.787*ratio2+.13793;
+        end
+        
+        if ratio3 > .008856
+            f3=ratio3^(1/3);
+        else
+            f3=7.787*ratio3+.13793;
+        end
+
+        handles.Lab_L(2)=116*f2-16;
+        handles.a(2)=500*(f1-f2);
+        handles.b(2)=200*(f2-f3);
     end
     
     if strcmp(handles.CIE_space,'xyY')==1
@@ -770,17 +954,18 @@ function [handles]=refresh(hObject,eventdata,handles)
         rowNames={'X','Y','Z','u','v','L'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
-        handles.Z(1) handles.Z(2); handles.u(1) handles.u(2);...
-        handles.v(1) handles.v(2)};
+        handles.Z(1) handles.Z(2); handles.LUV_u(1) handles.LUV_u(2);...
+        handles.LUV_v(1) handles.LUV_v(2)};
   
         set(handles.CIE_table,'RowName',rowNames)
         set(handles.CIE_table,'Data',CIE_table_data)
     end
     if strcmp(handles.CIE_space,'Lab')==1
-        rowNames={'X','Y','Z','a','b','L'};
+        rowNames={'X','Y','Z','L','a','b'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
-        handles.Z(1) handles.Z(2)};
+        handles.Z(1) handles.Z(2); handles.Lab_L(1) handles.Lab_L(2);...
+        handles.a(1) handles.a(2);handles.b(1) handles.b(2)};
   
         set(handles.CIE_table,'RowName',rowNames)
         set(handles.CIE_table,'Data',CIE_table_data)        
@@ -789,7 +974,8 @@ function [handles]=refresh(hObject,eventdata,handles)
         rowNames={'X','Y','Z','u','v','W'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
-        handles.Z(1) handles.Z(2)};
+        handles.Z(1) handles.Z(2); handles.UVW_u(1) handles.UVW_u(2);...
+        handles.UVW_v(1) handles.UVW_v(2); handles.W(1) handles.W(2)};
   
         set(handles.CIE_table,'RowName',rowNames)
         set(handles.CIE_table,'Data',CIE_table_data)        
@@ -816,14 +1002,16 @@ function [handles]=refresh(hObject,eventdata,handles)
         set(handles.LED1_slider,'value',handles.alpha(1+handles.LED_pagenum*5));
                 
         set(handles.LED1_toggle,'string',num2str(1+handles.LED_pagenum*5));
-        set(handles.LED1_toggle,'value',handles.LED_active(1+handles.LED_pagenum*5));
-
-        if handles.LED_active(1+handles.LED_pagenum*5)==1
-            set(handles.LED1_slider,'Enable','on')
-            set(handles.LED1_text,'Enable','on')
-        else
-            set(handles.LED1_slider,'Enable','off')  
-            set(handles.LED1_text,'Enable','off')    
+        set(handles.LED1_toggle,'value',handles.LED_active(1+handles.LED_pagenum*5));  
+        
+        if handles.slider_holding==0
+            if handles.LED_active(1+handles.LED_pagenum*5)==1
+               set(handles.LED1_slider,'Enable','on')
+               set(handles.LED1_text,'Enable','on')
+            else
+               set(handles.LED1_slider,'Enable','off')  
+               set(handles.LED1_text,'Enable','off')    
+            end
         end
         
     else
@@ -842,13 +1030,16 @@ function [handles]=refresh(hObject,eventdata,handles)
         set(handles.LED2_toggle,'string',num2str(2+handles.LED_pagenum*5))
         set(handles.LED2_toggle,'value',handles.LED_active(2+handles.LED_pagenum*5)) 
         
-        if handles.LED_active(2+handles.LED_pagenum*5)==1
-            set(handles.LED2_slider,'Enable','on')
-            set(handles.LED2_text,'Enable','on')
-        else
-            set(handles.LED2_slider,'Enable','off')  
-            set(handles.LED2_text,'Enable','off')    
+        if handles.slider_holding==0
+            if handles.LED_active(2+handles.LED_pagenum*5)==1
+               set(handles.LED2_slider,'Enable','on')
+               set(handles.LED2_text,'Enable','on')
+            else
+               set(handles.LED2_slider,'Enable','off')  
+               set(handles.LED2_text,'Enable','off')    
+            end
         end
+        
     else
         set(handles.LED2_toggle,'Visible','off')
         set(handles.LED2_text,'Visible','off')
@@ -864,13 +1055,14 @@ function [handles]=refresh(hObject,eventdata,handles)
         
         set(handles.LED3_toggle,'string',num2str(3+handles.LED_pagenum*5))
         set(handles.LED3_toggle,'value',handles.LED_active(3+handles.LED_pagenum*5))
-        
-        if handles.LED_active(3+handles.LED_pagenum*5)==1
-            set(handles.LED3_slider,'Enable','on')
-            set(handles.LED3_text,'Enable','on')
-        else
-            set(handles.LED3_slider,'Enable','off')  
-            set(handles.LED3_text,'Enable','off')    
+        if handles.slider_holding==0
+            if handles.LED_active(3+handles.LED_pagenum*5)==1
+               set(handles.LED3_slider,'Enable','on')
+               set(handles.LED3_text,'Enable','on')
+            else
+               set(handles.LED3_slider,'Enable','off')  
+               set(handles.LED3_text,'Enable','off')    
+            end        
         end
     else
         set(handles.LED3_toggle,'Visible','off')
@@ -887,13 +1079,14 @@ function [handles]=refresh(hObject,eventdata,handles)
         
         set(handles.LED4_toggle,'string',num2str(4+handles.LED_pagenum*5))
         set(handles.LED4_toggle,'value',handles.LED_active(4+handles.LED_pagenum*5))
-        
-        if handles.LED_active(4+handles.LED_pagenum*5)==1
-            set(handles.LED4_slider,'Enable','on')
-            set(handles.LED4_text,'Enable','on')
-        else
-            set(handles.LED4_slider,'Enable','off')  
-            set(handles.LED4_text,'Enable','off')    
+        if handles.slider_holding==0
+            if handles.LED_active(4+handles.LED_pagenum*5)==1
+               set(handles.LED4_slider,'Enable','on')
+               set(handles.LED4_text,'Enable','on')
+            else
+               set(handles.LED4_slider,'Enable','off')  
+               set(handles.LED4_text,'Enable','off')    
+            end  
         end
     else
         set(handles.LED4_toggle,'Visible','off')
@@ -910,14 +1103,16 @@ function [handles]=refresh(hObject,eventdata,handles)
         
         set(handles.LED5_toggle,'string',num2str(5+handles.LED_pagenum*5))
         set(handles.LED5_toggle,'value',handles.LED_active(5+handles.LED_pagenum*5)) 
-        
-        if handles.LED_active(5+handles.LED_pagenum*5)==1
-            set(handles.LED5_slider,'Enable','on')
-            set(handles.LED5_text,'Enable','on')
-        else
-            set(handles.LED5_slider,'Enable','off')  
-            set(handles.LED5_text,'Enable','off')    
+        if handles.slider_holding==0
+            if handles.LED_active(5+handles.LED_pagenum*5)==1
+               set(handles.LED5_slider,'Enable','on')
+               set(handles.LED5_text,'Enable','on')
+            else
+               set(handles.LED5_slider,'Enable','off')  
+               set(handles.LED5_text,'Enable','off')    
+            end       
         end
+        
     else
         set(handles.LED5_toggle,'Visible','off')
         set(handles.LED5_text,'Visible','off')
@@ -935,7 +1130,7 @@ function LED2_toggle_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.LED_active(2+handles.LED_pagenum*5)=get(hObject,'Value');
-
+% 
 % if get(hObject,'Value')==1
 %     set(handles.LED2_slider,'Enable','on')
 %     set(handles.LED2_text,'Enable','on')
@@ -984,10 +1179,12 @@ function LED2_slider_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 handles.alpha(2+handles.LED_pagenum*5)=get(hObject,'Value');
 
+handles.slider_holding=1;
 set(handles.LED2_slider,'enable','off');
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 set(handles.LED2_slider,'enable','on');
+handles.slider_holding=0;
 
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
@@ -1019,6 +1216,7 @@ handles.LED_active(3+handles.LED_pagenum*5)=get(hObject,'Value');
 %     set(handles.LED3_slider,'Enable','off')  
 %     set(handles.LED3_text,'Enable','off')    
 % end
+
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 guidata(hObject, handles);
@@ -1059,10 +1257,12 @@ function LED3_slider_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 handles.alpha(3+handles.LED_pagenum*5)=get(hObject,'Value');
 
+handles.slider_holding=1;
 set(handles.LED3_slider,'enable','off');
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 set(handles.LED3_slider,'enable','on');
+handles.slider_holding=0;
 
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
@@ -1134,10 +1334,12 @@ function LED4_slider_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 handles.alpha(4+handles.LED_pagenum*5)=get(hObject,'Value');
 
+handles.slider_holding=1;
 set(handles.LED4_slider,'enable','off');
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 set(handles.LED4_slider,'enable','on');
+handles.slider_holding=0;
 
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
@@ -1209,10 +1411,12 @@ function LED5_slider_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 handles.alpha(5+handles.LED_pagenum*5)=get(hObject,'Value');
 
+handles.slider_holding=1;
 set(handles.LED5_slider,'enable','off');
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 set(handles.LED5_slider,'enable','on');
+handles.slider_holding=0;
 
 guidata(hObject, handles);
 % Hints: get(hObject,'Value') returns position of slider
@@ -1359,12 +1563,39 @@ contents = cellstr(get(hObject,'String'));
 handles.CIE_space=contents{get(hObject,'Value')};
 
 handles=refresh(hObject,eventdata,handles);
-handles=replot(hObject,eventdata,handles);
+handles=replot_color_space(hObject,eventdata,handles);
 guidata(hObject, handles);
 
 % --- Executes during object creation, after setting all properties.
 function CIE_popup_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to CIE_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on selection change in reference_illuminant_popup.
+function reference_illuminant_popup_Callback(hObject, eventdata, handles)
+% hObject    handle to reference_illuminant_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns reference_illuminant_popup contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from reference_illuminant_popup
+contents = cellstr(get(hObject,'String'));
+handles.standard_illuminant=handles.illuminant_data_2deg(strcmp(handles.illuminant_names,contents{get(hObject,'Value')})==1,:);
+
+handles=refresh(hObject,eventdata,handles);
+guidata(hObject, handles);
+
+% --- Executes during object creation, after setting all properties.
+function reference_illuminant_popup_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to reference_illuminant_popup (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 
