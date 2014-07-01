@@ -1,67 +1,110 @@
 close all
 clear all
-clc
+%clc
 
-input=importdata('red_LED.txt');
+red=importdata('red_LED.txt');
+green=importdata('green_LED.txt');
+blue=importdata('blue_LED.txt');
+amber=importdata('amber_LED.txt');
+white=importdata('white_LED.txt');
+
+red=red(2:end,:)
+green=green(2:end,:);
+blue=blue(2:end,:);
+amber=amber(2:end,:);
+white=white(2:end,:);
+
+white_lux=193;
+red_lux=65;
+green_lux=51;
+blue_lux=44;
+amber_lux=125;
+
 cmf1=importdata('xyz_cmf.txt');
 
+Wavelength=360:1:760;
 figure(1)
-plot(input(:,1),input(:,2),'LineWidth',2)
+plot(Wavelength,red(:,2),'LineWidth',2)
 
-xcmf=spline(cmf1(:,1),cmf1(:,2),input(:,1));
-xcmf(input(:,1) < min(cmf1(:,1)))=0;
-xcmf(input(:,1) > max(cmf1(:,1)))=0;
+xcmf=spline(cmf1(:,1),cmf1(:,2),Wavelength);
+xcmf(Wavelength < min(cmf1(:,1)))=0;
+xcmf(Wavelength > max(cmf1(:,1)))=0;
 
-ycmf=spline(cmf1(:,1),cmf1(:,3),input(:,1));
-ycmf(input(:,1) < min(cmf1(:,1)))=0;
-ycmf(input(:,1) > max(cmf1(:,1)))=0;
+ycmf=spline(cmf1(:,1),cmf1(:,3),Wavelength);
+ycmf(Wavelength < min(cmf1(:,1)))=0;
+ycmf(Wavelength > max(cmf1(:,1)))=0;
 
-zcmf=spline(cmf1(:,1),cmf1(:,4),input(:,1));
-zcmf(input(:,1) < min(cmf1(:,1)))=0;
-zcmf(input(:,1) > max(cmf1(:,1)))=0;
+zcmf=spline(cmf1(:,1),cmf1(:,4),Wavelength);
+zcmf(Wavelength < min(cmf1(:,1)))=0;
+zcmf(Wavelength > max(cmf1(:,1)))=0;
 
 figure(2)
 hold on
-plot(input(:,1),xcmf,'r')
-plot(input(:,1),ycmf,'g')
-plot(input(:,1),zcmf,'b')
+plot(Wavelength,xcmf,'r')
+plot(Wavelength,ycmf,'g')
+plot(Wavelength,zcmf,'b')
 hold off
 
-s=input(:,2);
+s=red(:,2);
 %snorm=(s-min(s))./(max(s)-min(s))%s./(sum(s)/size(s,1));
 %s=snorm;
 
 %X=sum(xcmf.*s)/size(s,1)
-X=683*sum(s.*xcmf.*(input(2,1)-input(1,1)))
-%k=100/sum(s.*ycmf.*(input(2,1)-input(1,1)))
-%X=k*sum(s.*xcmf.*(input(2,1)-input(1,1)))
-
-%Y=sum(ycmf.*s)/size(s,1)
-Y=683*sum(s.*ycmf.*(input(2,1)-input(1,1)))
-%Y=k*sum(s.*ycmf.*(input(2,1)-input(1,1)))
-
-%Z=sum(zcmf.*s)/size(s,1)
-Z=683*sum(s.*zcmf.*(input(2,1)-input(1,1)))
+% X=683*sum(s.*xcmf.*(red(2,1)-red(1,1)));
+% %k=100/sum(s.*ycmf.*(input(2,1)-input(1,1)))
+% %X=k*sum(s.*xcmf.*(input(2,1)-input(1,1)))
+% 
+% %Y=sum(ycmf.*s)/size(s,1)
+% Y=683*sum(s.*ycmf.*(red(2,1)-red(1,1)));
+% %Y=k*sum(s.*ycmf.*(input(2,1)-input(1,1)))
+% 
+% %Z=sum(zcmf.*s)/size(s,1)
+% Z=683*sum(s.*zcmf.*(red(2,1)-red(1,1)));
 %Z=k*sum(s.*zcmf.*(input(2,1)-input(1,1)))
 
-lux=65;
-alpha=lux/683*sum(s.*ycmf.*(input(2,1)-input(1,1)))
-s=alpha*s
+k=683%100/sum(green(:,2).*ycmf'.*(green(2,1)-green(1,1)));%1%.06;%
+q=11100;
+alpha_red=red_lux/(k*sum(red(:,2).*ycmf'.*(red(2,1)-red(1,1))))
+%test=max(ycmf)
+%alpha2=65/(k*sum(red(:,2).*ycmf'.*.5))
+red(:,2)=alpha_red*red(:,2);
+
+%k=100/sum(green(:,2).*ycmf'.*(green(2,1)-green(1,1)));
+alpha_green=green_lux/(k*sum(green(:,2).*ycmf'.*(green(2,1)-green(1,1))))
+green(:,2)=alpha_green*green(:,2);
+
+%k=100/sum(blue(:,2).*ycmf'.*(blue(2,1)-blue(1,1)));
+alpha_blue=blue_lux/(k*sum(blue(:,2).*ycmf'.*(blue(2,1)-blue(1,1))))
+blue(:,2)=alpha_blue*blue(:,2);
+
+%k=100/sum(amber(:,2).*ycmf'.*(amber(2,1)-amber(1,1)));
+alpha_amber=amber_lux/(k*sum(amber(:,2).*ycmf'.*(amber(2,1)-amber(1,1))))
+amber(:,2)=alpha_amber*amber(:,2);
+
+%k=100/sum(white(:,2).*ycmf'.*(white(2,1)-white(1,1)));
+alpha_white=white_lux/(k*sum(white(:,2).*ycmf'.*(white(2,1)-white(1,1))))
+white(:,2)=alpha_white*white(:,2);
 
 figure(3)
-plot(input(:,1),s)
+hold on
+plot(Wavelength,red(:,2),'r')
+plot(Wavelength,green(:,2),'g')
+plot(Wavelength,blue(:,2),'b')
+plot(Wavelength,amber(:,2),'y')
+plot(Wavelength,white(:,2),'k')
+
 % XYZ_factor=100/Y;
 % X=XYZ_factor*X
 % Y=XYZ_factor*Y
 % Z=XYZ_factor*Z
 
-% X=trapz(input(:,1),xcmf.*s)
-% Y=trapz(input(:,1),ycmf.*s)
-% Z=trapz(input(:,1),zcmf.*s)
+% X=trapz(Wavelength,xcmf.*s)
+% Y=trapz(Wavelength,ycmf.*s)
+% Z=trapz(Wavelength,zcmf.*s)
 
 %check validity
-x=X/(X+Y+Z)
-y=Y/(X+Y+Z)
+%x=X/(X+Y+Z)
+%y=Y/(X+Y+Z)
 
 % Y=100;
 % X=x*Y/y;
