@@ -635,27 +635,17 @@ function Untitled_1_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-function [f] = objfun(x, hObject, eventdata, handles)
-    R=[];
-    for n=1:size(handles.LED_data,2)
-        if handles.LED_active(n)==1
-            R=[R handles.LED_data(:,n)];
-        end
-    end
-    
-    standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
-    standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
-    
+function [f] = objfun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)
 
     %order matters sum(handles.ycmf*R.*x)!=sum(x.*handles.ycmf*R)
-    if handles.Y(2)/100 <=(6/29)^3
-       f=sqrt((handles.LUV_L(1)-.01128*sum(handles.ycmf*R.*x)).^2 ...
-       +(handles.LUV_u(1)-.1466*sum(handles.ycmf*R.*x)*(4*sum(handles.xcmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_u)).^2 ...
-       +(handles.LUV_v(1)-.1466*sum(handles.ycmf*R.*x)*(9*sum(handles.ycmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_v)).^2);
+    if  ratio(2)<=(6/29)^3
+       f=sqrt((ideal_data(1)-.01128*sum(ycmf*R.*x)).^2 ...
+       +(ideal_data(2)-.1466*sum(ycmf*R.*x)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+       +(ideal_data(3)-.1466*sum(ycmf*R.*x)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2);
     else
-       f=sqrt((handles.LUV_L(1)-2.69*(sum(handles.ycmf*R.*x))^(1/3)-16).^2 ...
-       +(handles.LUV_u(1)-13*(2.69*(sum(handles.ycmf*R.*x))^(1/3)-16)*(4*sum(handles.xcmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_u)).^2 ...
-       +(handles.LUV_v(1)-13*(2.69*(sum(handles.ycmf*R.*x))^(1/3)-16)*(9*sum(handles.ycmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_v)).^2); 
+       f=sqrt((ideal_data(1)-2.69*(sum(ycmf*R.*x))^(1/3)-16).^2 ...
+       +(ideal_data(2)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+       +(ideal_data(3)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2); 
     end
     
 % --- Executes on button press in optimize_coefficients.
@@ -663,6 +653,7 @@ function optimize_coefficients_Callback(hObject, eventdata, handles)
 % hObject    handle to optimize_coefficients (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
 R=[];
 for n=1:size(handles.LED_data,2)
     if handles.LED_active(n)==1
@@ -673,31 +664,37 @@ end
 standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
 standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
 
-x=handles.alpha(handles.LED_active==1);
-Lcorrect=handles.LUV_L(2);
-Ucorrect=handles.LUV_u(2);
-Vcorrect=handles.LUV_v(2);
+%%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
+% sol=handles.alpha(handles.LED_active==1);
+% Lcorrect=handles.LUV_L(2);
+% Ucorrect=handles.LUV_u(2);
+% Vcorrect=handles.LUV_v(2);
+% 
+% if handles.Y(2)/100 <=(6/29)^3
+%     Ltest=.01128*sum(handles.ycmf*R.*sol);
+%     Utest=.1466*sum(handles.ycmf*R.*sol)*(4*sum(handles.xcmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_u);
+%     Vtest=.1466*sum(handles.ycmf*R.*sol)*(9*sum(handles.ycmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_v);
+% else
+%     Ltest=2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16;
+%     Utest=13*(2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16)*(4*sum(handles.xcmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_u);
+%     Vtest=13*(2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16)*(9*sum(handles.ycmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_v);
+% end
+% t1=[Lcorrect Ltest]
+% t2=[Ucorrect Utest]
+% t3=[Vcorrect Vtest]
+%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
 
-if handles.Y(2)/100 <=(6/29)^3
-    Ltest=.01128*sum(handles.ycmf*R.*x);
-    Utest=.1466*sum(handles.ycmf*R.*x)*(4*sum(handles.xcmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_u);
-    Vtest=.1466*sum(handles.ycmf*R.*x)*(9*sum(handles.ycmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_v);
-else
-    Ltest=2.69*(sum(handles.ycmf*R.*x))^(1/3)-16;
-    Utest=13*(2.69*(sum(handles.ycmf*R.*x))^(1/3)-16)*(4*sum(handles.xcmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_u);
-    Vtest=13*(2.69*(sum(handles.ycmf*R.*x))^(1/3)-16)*(9*sum(handles.ycmf*R.*x)/(sum(handles.xcmf*R.*x)+15*sum(handles.ycmf*R.*x)+3*sum(handles.zcmf*R.*x))-standard_v);
-end
-x=[Lcorrect Ltest];
-y=[Ucorrect Utest];
-z=[Vcorrect Vtest];
+xcmf=handles.xcmf;
+ycmf=handles.ycmf;
+zcmf=handles.zcmf;
+
+ref_Y=100;
+ref_X=handles.standard_illuminant(1)*ref_Y/handles.standard_illuminant(2);
+ref_Z=handles.standard_illuminant(2)*ref_Y/(1-handles.standard_illuminant(1)-handles.standard_illuminant(2));
+
+ratio=[handles.X(1)/ref_X handles.Y(2)/ref_Y handles.Z(1)/ref_Z];
 
 if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1
-    R=[];
-    for n=1:size(handles.LED_data,2)
-        if handles.LED_active(n)==1
-            R=[R handles.LED_data(:,n)];
-        end
-    end
     s=handles.match_data(:,handles.match_active==1);
 
     lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
@@ -720,26 +717,34 @@ if strcmp(handles.optimize_type,'CCT Match')==1
 end
 if strcmp(handles.optimize_type,'Minimized LUV dE')==1
 
-    options = optimoptions('fmincon','Algorithm','sqp','Display','iter-detailed');%,'DerivativeCheck','on');
+    options = optimoptions('fmincon','Algorithm','sqp','Display','off');%,'DerivativeCheck','on');
 
-    %x0=ones(1,size(handles.LED_active(handles.LED_active==1),2))*.5;
+    x0=ones(1,size(handles.LED_active(handles.LED_active==1),2))*.5;
     lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
     ub=ones(1,size(handles.LED_active(handles.LED_active==1),2));
     ub=ub.*handles.max_alpha;
 
     %[x,fval]=fmincon('objfun',x0,[],[],[],[],lb,ub,[],options);
+    ideal_data=[handles.LUV_L(1) handles.LUV_u(1) handles.LUV_v(1)];
+    f=@(x)objfun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data);
+    [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
 
-    local_minima=[];
-    xdata=[];
-    for i=1:handles.max_alpha
-        x0=handles.max_alpha*[rand rand rand rand rand]
-        [x,fval]=fmincon('objfun',x0,[],[],[],[],lb,ub,[],options);
-        local_minima=[local_minima fval];
-        xdata=[xdata; x];
-        
-    end
-    [global_min,index]=min(local_minima)
-    x=xdata(index,:);
+    
+%     local_minima=[];
+%     xdata=[];
+%     for i=1:handles.max_alpha
+%         x0=handles.max_alpha*[rand rand rand rand rand];
+%         [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
+%         %fprintf([repmat('%3.8f ', 1, numel(x)+1) '\n'], [x, fval])
+%         xdata=[xdata; x];        
+%     end
+%     local_minima=[];
+%     for i=1:size(xdata,1)
+%         local_minima=[local_minima; objfun(xdata(i,:),ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)];
+%     end
+%     display=[xdata local_minima]
+%     [global_min,index]=min(local_minima);
+%     x=xdata(index,:);
     
     i=1;
     for n=1:size(handles.LED_active,2)
