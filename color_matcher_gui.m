@@ -88,11 +88,8 @@ handles.clean=1;
 
 options=cellstr([
     'Least-Squares Spectrum Match';
-    'CCT Match                   ';
     'Minimized LUV dE            ';
-    'Minimized Lab dE76          ';
-    'Minimized Lab dE94          ';
-    'Minimized Lab dE00          ']);
+    'Minimized Lab dE76          ';]);
 set(handles.optimize_options,'string',options);
 handles.optimize_type='Least-Squares Spectrum Match';
 
@@ -103,7 +100,6 @@ set(handles.units_popup,'string',options);
 handles.unit_type='Spectral Power (W/m)';
 handles.current_unit_type='Spectral Power (W/m)';
 set(handles.current_unit_text,'string',handles.current_unit_type) 
-
 
 handles.match_data=[];
 handles.LED_data=[];
@@ -635,7 +631,55 @@ function Untitled_1_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-function [f] = objfun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)
+% function [f] = CCT_fun(x,R,xcmf,ycmf,zcmf,uvbbCCT)
+% 
+%         f=handles.uvbbCCT(min(sqrt((handles.LUV_u(1)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v(1)-handles.uvbbCCT(:,3)).^2)),1)
+
+function [f] = Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data)
+    if ratio(2) > (6/29)^3
+       if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+       elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+       elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+       elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+       end      
+    end
+
+    %(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)
+    %(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)
+    if ratio(2) <= (6/29)^3
+       if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+       elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+       elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+       elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+       end         
+    end
+
+
+function [f] = LUV_dE_fun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)
 
     %order matters sum(handles.ycmf*R.*x)!=sum(x.*handles.ycmf*R)
     if  ratio(2)<=(6/29)^3
@@ -647,12 +691,14 @@ function [f] = objfun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)
        +(ideal_data(2)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
        +(ideal_data(3)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2); 
     end
-    
+
 % --- Executes on button press in optimize_coefficients.
 function optimize_coefficients_Callback(hObject, eventdata, handles)
 % hObject    handle to optimize_coefficients (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+temp_handles=findall(handles.tab1Panel, 'enable', 'on');
+set(temp_handles, 'enable', 'off')
 
 R=[];
 for n=1:size(handles.LED_data,2)
@@ -663,7 +709,22 @@ end
 
 standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
 standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+standard_Y=100;
+standard_X=handles.standard_illuminant(1)*standard_Y/handles.standard_illuminant(2);
+standard_Z=handles.standard_illuminant(2)*standard_Y/(1-handles.standard_illuminant(1)-handles.standard_illuminant(2));
 
+xcmf=handles.xcmf;
+ycmf=handles.ycmf;
+zcmf=handles.zcmf;
+
+ratio=[handles.X(1)/standard_X handles.Y(2)/standard_Y handles.Z(1)/standard_Z];
+
+options = optimoptions('fmincon','Algorithm','sqp','Display','off');%,'DerivativeCheck','on');
+
+x0=ones(1,size(handles.LED_active(handles.LED_active==1),2))*.5;
+lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
+ub=ones(1,size(handles.LED_active(handles.LED_active==1),2));
+ub=ub.*handles.max_alpha;
 %%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
 % sol=handles.alpha(handles.LED_active==1);
 % Lcorrect=handles.LUV_L(2);
@@ -683,17 +744,68 @@ standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+1
 % t2=[Ucorrect Utest]
 % t3=[Vcorrect Vtest]
 %%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
-
-xcmf=handles.xcmf;
-ycmf=handles.ycmf;
-zcmf=handles.zcmf;
-
-ref_Y=100;
-ref_X=handles.standard_illuminant(1)*ref_Y/handles.standard_illuminant(2);
-ref_Z=handles.standard_illuminant(2)*ref_Y/(1-handles.standard_illuminant(1)-handles.standard_illuminant(2));
-
-ratio=[handles.X(1)/ref_X handles.Y(2)/ref_Y handles.Z(1)/ref_Z];
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
+% x=handles.alpha(handles.LED_active==1);
+% Lcorrect=handles.Lab_L(2);
+% acorrect=handles.a(2);
+% bcorrect=handles.b(2);
+% 
+%     if ratio(2) > (6/29)^3
+%        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+%            note='1'
+%            Ltest=116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16;
+%            atest=500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3));
+%            btest=200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3));
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+%            note='2'
+%            Ltest=116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16;
+%            atest=500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.1379-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3));
+%            btest=200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3));           
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+%            note='3'
+%            Ltest=116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16;
+%            atest=500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.1379-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3));
+%            btest=200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.1379);           
+%        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+%            note='4'
+%            Ltest=116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16;
+%            atest=500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3));
+%            btest=200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.1379);           
+%        end      
+%     end
+% 
+%     %7.787*ratio3+.13793
+%     
+%     %(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)
+%     %(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)
+%     if ratio(2) <= (6/29)^3
+%        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+%            note='5'
+%            Ltest=116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-16;
+%            atest=500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379));
+%            btest=200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3));
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+%            note='6'
+%            Ltest=116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-16;
+%            atest=500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.1379-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379));
+%            btest=200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3));           
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+%            note='7'
+%            Ltest=116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16;
+%            atest=500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793));
+%            btest=200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793));           
+%        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+%            note='8'
+%            Ltest=116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-16;
+%            atest=500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379));
+%            btest=200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.1379)-7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.1379);           
+%        end         
+%     end
+% 
+% t1=[Lcorrect Ltest]
+% t2=[acorrect atest]
+% t3=[bcorrect btest]
+%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
 if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1
     s=handles.match_data(:,handles.match_active==1);
 
@@ -712,39 +824,13 @@ if strcmp(handles.optimize_type,'Least-Squares Spectrum Match')==1
         end
     end
 end
-if strcmp(handles.optimize_type,'CCT Match')==1
-    
-end
+
 if strcmp(handles.optimize_type,'Minimized LUV dE')==1
 
-    options = optimoptions('fmincon','Algorithm','sqp','Display','off');%,'DerivativeCheck','on');
-
-    x0=ones(1,size(handles.LED_active(handles.LED_active==1),2))*.5;
-    lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
-    ub=ones(1,size(handles.LED_active(handles.LED_active==1),2));
-    ub=ub.*handles.max_alpha;
-
-    %[x,fval]=fmincon('objfun',x0,[],[],[],[],lb,ub,[],options);
+    %[x,fval]=fmincon('LUV_dE_fun',x0,[],[],[],[],lb,ub,[],options);
     ideal_data=[handles.LUV_L(1) handles.LUV_u(1) handles.LUV_v(1)];
-    f=@(x)objfun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data);
+    f=@(x)LUV_dE_fun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data);
     [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
-
-    
-%     local_minima=[];
-%     xdata=[];
-%     for i=1:handles.max_alpha
-%         x0=handles.max_alpha*[rand rand rand rand rand];
-%         [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
-%         %fprintf([repmat('%3.8f ', 1, numel(x)+1) '\n'], [x, fval])
-%         xdata=[xdata; x];        
-%     end
-%     local_minima=[];
-%     for i=1:size(xdata,1)
-%         local_minima=[local_minima; objfun(xdata(i,:),ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)];
-%     end
-%     display=[xdata local_minima]
-%     [global_min,index]=min(local_minima);
-%     x=xdata(index,:);
     
     i=1;
     for n=1:size(handles.LED_active,2)
@@ -754,6 +840,24 @@ if strcmp(handles.optimize_type,'Minimized LUV dE')==1
         end
     end
 end
+
+if strcmp(handles.optimize_type,'Minimized Lab dE76')==1
+
+    ideal_data=[handles.Lab_L(1) handles.a(1) handles.b(1)];    
+    f=@(x)Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data);
+    [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
+    
+    i=1;
+    for n=1:size(handles.LED_active,2)
+        if handles.LED_active(n)==1
+            handles.alpha(n)=x(i);
+            i=i+1;
+        end
+    end
+end
+
+set(temp_handles, 'enable', 'on')
+
 handles=refresh(hObject,eventdata,handles);
 handles=replot(hObject,eventdata,handles);
 guidata(hObject, handles);
@@ -969,7 +1073,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.LUV_v(1)=13*handles.LUV_L(1)*(handles.LUV_v_prime(1)-standard_v);        
         
         %credit pspectro getuvbbCCT.m
-        finddistance = sqrt((handles.LUV_u(1)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v(1)-handles.uvbbCCT(:,3)).^2);
+        finddistance = sqrt((handles.LUV_u_prime(1)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v_prime(1)-handles.uvbbCCT(:,3)).^2);
         [mindistance,row] = min(finddistance);
 
         handles.cct(1) = handles.uvbbCCT(row,1);
@@ -1045,7 +1149,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.LUV_v(2)=13*handles.LUV_L(2)*(handles.LUV_v_prime(2)-standard_v);        
         
         %credit pspectro getuvbbCCT.m
-        finddistance = sqrt((handles.LUV_u(2)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v(2)-handles.uvbbCCT(:,3)).^2);
+        finddistance = sqrt((handles.LUV_u_prime(2)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v_prime(2)-handles.uvbbCCT(:,3)).^2);
         [mindistance,row] = min(finddistance);
 
         handles.cct(2) = handles.uvbbCCT(row,1);
