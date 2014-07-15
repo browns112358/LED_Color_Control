@@ -77,7 +77,6 @@ handles.match_active=[];
 
 handles.LED_pages=0;
 handles.LED_pagenum=0;
-
 set(handles.prev_page,'Enable','off') 
 set(handles.next_page,'Enable','off')
 set(handles.optimize_coefficients,'Enable','off') 
@@ -86,16 +85,16 @@ temp=[''];
 handles.matching_spectrum_names=cellstr(temp);
 handles.clean=1;
 
-options={
+options=cellstr([
     'Least-Squares Spectrum Match';
-    'Minimized LUV dE';
-    'Minimized Lab dE76'};
+    'Minimized LUV dE            ';
+    'Minimized Lab dE76          ';]);
 set(handles.optimize_options,'string',options);
 handles.optimize_type='Least-Squares Spectrum Match';
 
-options={
+options=cellstr([
     'Spectral Power (W/m)   ';
-    'Unknown (Lux available)'};
+    'Unknown (Lux available)';]);
 set(handles.units_popup,'string',options);
 handles.unit_type='Spectral Power (W/m)';
 handles.current_unit_type='Spectral Power (W/m)';
