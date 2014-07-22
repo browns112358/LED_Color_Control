@@ -57,31 +57,47 @@ function color_matcher_gui_OpeningFcn(hObject, eventdata, handles, varargin)
 % handles    structure with handles and user data (see GUIDATA)
 % varargin   command line arguments to color_matcher_gui (see VARARGIN)
 % Choose default command line output for color_matcher_gui
-handles.LED_lux=[];
-handles.Ideal_lux=[];
 
+%set up graphics for CIE Color spaces
 handles.xyY_bg=imread('RequiredData/xyYaxes.png');
 handles.xyY_bg=flipdim(handles.xyY_bg,1);
 
 handles.LUV_bg=imread('RequiredData/LUVaxes.png');
 handles.LUV_bg=flipdim(handles.LUV_bg,1);
 
-handles.CIE_space='xyY';
 handles.slider_holding=0;
 
+%Set up LED/Ideal control variables
+%alpha refers to the multipliers
+handles.ideal_multiplier=[];
 handles.output = hObject;
 handles.LED_active=[];
 handles.alpha=[];
 handles.generated=[];
 handles.match_active=[];
+handles.LED_lux=[];
+handles.Ideal_lux=[];
+handles.match_data=[];
+handles.LED_data=[];
+handles.Wavelength=380:.5:780;
+handles.max_alpha=1;
+handles.normalize=0;
 
+%Set up page system
 handles.LED_pages=0;
 handles.LED_pagenum=0;
-
 set(handles.prev_page,'Enable','off') 
 set(handles.next_page,'Enable','off')
-set(handles.optimize_coefficients,'Enable','off') 
 
+%set up popup menus and other lists
+options={'xyY';
+         'LUV';
+         'Lab';
+         'UVW';
+         'RGB'};
+set(handles.CIE_popup,'string',options);
+handles.CIE_space='xyY';
+     
 temp=[''];
 handles.matching_spectrum_names=cellstr(temp);
 handles.clean=1;
@@ -101,10 +117,31 @@ handles.unit_type='Spectral Power (W/m)';
 handles.current_unit_type='Spectral Power (W/m)';
 set(handles.current_unit_text,'string',handles.current_unit_type) 
 
-handles.match_data=[];
-handles.LED_data=[];
+handles.illuminant_names=cellstr([
+    'A  ';
+    'D50';
+    'D55';
+    'D65';
+    'D75';
+    'E  ';
+    'F1 ';
+    'F2 ';
+    'F3 ';
+    'F4 ';
+    'F5 ';
+    'F6 ';
+    'F7 ';
+    'F8 ';
+    'F9 ';
+    'F10';
+    'F11';
+    'F12';]);
+handles.standard_illuminant=[0.44757 0.40745];
+set(handles.reference_illuminant_popup,'string',handles.illuminant_names);
 
-handles.Wavelength=380:.5:780;
+%Import and set up required data for calculations
+handles.illuminant_data_xy_2deg=importdata('RequiredData/illuminants_xy_2deg.txt');
+handles.illuminant_data_xy_10deg=importdata('RequiredData/illuminants_xy_10deg.txt');
 
 %3 columns: kelvin, u, v with 1 kelvin resolution. Credit pspectro 
 handles.uvbbCCT=importdata('RequiredData/uvbbCCT.txt');
@@ -128,12 +165,23 @@ handles.xcmf=xcmf;
 handles.ycmf=ycmf;
 handles.zcmf=zcmf;
 
+%Set up color space data variables
 %[ideal generated]
 handles.cct=[0 0];
 
 handles.X=[0 0];
 handles.Y=[0 0];
 handles.Z=[0 0]; 
+
+handles.R=[0 0];
+handles.G=[0 0];
+handles.B=[0 0];
+
+handles.RGB_brightness_mod=[0 0];
+
+handles.RGB_mat=[ 2.0413690 -0.5649464 -0.3446944;
+                        -0.9692660  1.8760108  0.0415560;
+                         0.0134474 -0.1183897  1.0154096];
 
 handles.x=[0 0];
 handles.y=[0 0];
@@ -158,43 +206,16 @@ handles.dE76=-1;
 handles.dE94=-1;
 handles.dE00=-1;
 
-handles.illuminant_names=cellstr([
-    'A  ';
-    'D50';
-    'D55';
-    'D65';
-    'D75';
-    'E  ';
-    'F1 ';
-    'F2 ';
-    'F3 ';
-    'F4 ';
-    'F5 ';
-    'F6 ';
-    'F7 ';
-    'F8 ';
-    'F9 ';
-    'F10';
-    'F11';
-    'F12';]);
-handles.standard_illuminant=[0.44757 0.40745];
-
-set(handles.reference_illuminant_popup,'string',handles.illuminant_names);
-
-handles.illuminant_data_xy_2deg=importdata('RequiredData/illuminants_xy_2deg.txt');
-handles.illuminant_data_xy_10deg=importdata('RequiredData/illuminants_xy_10deg.txt');
-
+%initialize button states
+set(handles.optimize_coefficients,'Enable','off') 
 set(handles.matching_spectrum_popup,'Enable','off')
 set(handles.LED1_toggle,'Value',1);
 set(handles.LED2_toggle,'Value',1);
 set(handles.LED3_toggle,'Value',1);
 set(handles.LED4_toggle,'Value',1);
 set(handles.LED5_toggle,'Value',1);
-
 set(handles.range1,'Value',1);
-handles.max_alpha=1;
 
-handles.normalize=0;
 %set(handles.range1,'Visible','off')
 %set(handles.range2,'Visible','off')
 
@@ -273,7 +294,7 @@ handles.a2=axes('Units','normalized',...
                 'Color',handles.unselectedTabColor,...
                 'Position',[pos2(1) pos2(2) pos2(3) pos2(4)+0.01],...
                 'ButtonDownFcn','color_matcher_gui(''a2bd'',gcbo,[],guidata(gcbo))');
-handles.t2=text('String','CIE Color Spaces',...
+handles.t2=text('String','Color Spaces',...
                 'Units','normalized',...
                 'Position',[pos2(3)/2,pos2(2)/2+pos2(4)],...
                 'HorizontalAlignment','left',...
@@ -743,6 +764,8 @@ function LED1_slider_Callback(hObject, eventdata, handles)
 
 handles.alpha(1+handles.LED_pagenum*5)=get(hObject,'Value');
 
+%Turn off slider while plotting and refreshing is going on to prevent lag
+%when you hold down the slider
 handles.slider_holding=1;
 set(handles.LED1_slider,'enable','off')
 handles=refresh(hObject,eventdata,handles);
@@ -775,13 +798,21 @@ function import_LED_pushbutton_Callback(hObject, eventdata, handles)
 
 %Assumes the first column is wavelength and eqach subsequent column is an
 %LED spectrum. Limited to 5 LEDs
-[filename, pathname]=uigetfile({'*.txt';'*.m';'*.csv';'*.*'});
 
-if ischar(filename) %is a double (0) if cancel is slected or window closed
+%open file browser window
+[filename, pathname]=uigetfile({'*.*';'*.txt';'*.m';'*.csv'});
+
+%filename is a double (0) if cancel is slected or window closed
+if ischar(filename) 
     FileNameString=fullfile(pathname, filename); %Same as FullFileName
     InputData=importdata(FileNameString);
     tempWave=InputData(:,1);
     
+    %Separate lux data (if it is supposed to be there) from the rest of the
+    %data. If it is meant to be there but isn't, output a formatting error
+    %to the user and cancel the data import. 
+    
+    %hacky solution because I couldn't make exceptions work with callbacks
     continue_callback=1;
     if  strcmp(handles.unit_type,'Unknown (Lux available)')==1
         if InputData(1,1)==0
@@ -801,16 +832,22 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
         end
     end
     
-    %hacky solution because I couldn't make exceptions work with callbacks
     if continue_callback==1
+        %loop through each column of data (each column is a spectrum for a
+        %single LED)
         for n=2:size(InputData,2)
+            %update control variables for appropriate number of LEDs
             handles.LED_active(end+1)=1;
             handles.alpha(end+1)=1;
+            
+            %spline the data to match the standardized wavelength range and
+            %sampling frequency
             data=spline(tempWave,InputData(:,n),handles.Wavelength);
             data(handles.Wavelength < min(tempWave))=0;
             data(handles.Wavelength > max(tempWave))=0;
 
-            if strcmp(handles.unit_type,'Unknown (Lux available)')==1% && size(handles.LED_active,2) == size(handles.LED_lux,2)
+            %if lux available, correct for normalization of the data
+            if strcmp(handles.unit_type,'Unknown (Lux available)')==1
                 data=(data-min(data)) ./ (max(data)-min(data));
                 k=683;
 
@@ -819,13 +856,17 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
                 handles.current_unit_type='Spectral Irradiance (W*m^-2*nm^-1)';
             end       
 
+            %add the processed data to the handle
             handles.LED_data=[handles.LED_data data'];
-
         end
 
+        %only allow optimization when both LEDs and ideal spectra have been
+        %imported
         if size(handles.LED_active(handles.LED_active==1),2) >= 1 && size(handles.match_active(handles.match_active==1),2)>=1
             set(handles.optimize_coefficients,'Enable','on') 
         end
+        %imported data only makes sense if it's all the same units. Remove
+        %the option to change after the first import
         set(handles.units_popup,'Enable','off') 
     end
 end
@@ -839,13 +880,15 @@ function import_match_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to import_match_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-[filename, pathname]=uigetfile({'*.txt';'*.m';'*.csv';'*.*'});
+[filename, pathname]=uigetfile({'*.*';'*.txt';'*.m';'*.csv'});
 
-if ischar(filename) %is a double (0) if cancel is slected or window closed
-    FileNameString=fullfile(pathname, filename); %Same as FullFileName
+%filename is a double (0) if cancel is slected or the window is closed
+if ischar(filename) 
+    FileNameString=fullfile(pathname, filename);
     InputData=importdata(FileNameString);
     tempWave=InputData(:,1);
 
+    %handles lux data and give formatting error if necessary
     continue_callback=1;
     if  strcmp(handles.unit_type,'Unknown (Lux available)')==1
         if InputData(1,1)==0
@@ -866,37 +909,57 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
     
     if continue_callback==1
         
+        %enables the popup list if this is the first ideal import
         if size(handles.match_active,2)==0
             set(handles.matching_spectrum_popup,'Enable','on')
         end
 
+        %removes the first "empty" element from the popup list during the
+        %first import. There is probably a neater way to do this.
         if handles.clean==1
             handles.matching_spectrum_names(:,1)=[];
             handles.clean=0;
         end
 
+        %loop through each column of the imported data
         for n=2:size(InputData,2)
+            
+            %handles the case where this file has been imported before. Gives
+            %it a different name and associated constants even though the
+            %data is the same
             if size(handles.matching_spectrum_names(strcmp(handles.matching_spectrum_names,filename)==1),2) >= 1
                 temp_names=regexprep(handles.matching_spectrum_names,'---(\w*)','');
                 repeat=size(temp_names(strcmp(temp_names,filename)==1),2)+1;
-                handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=strcat(filename,'---',num2str(repeat));                
+                handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=strcat(filename,'---',num2str(repeat)); 
+                
+            %one spectrum in this file
             elseif size(InputData,2) <= 2
                 handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=filename;
+                
+            %handles the case where there are multiple spectra in the same 
+            %file. Gives each a unique id      
             else
                 handles.matching_spectrum_names{1,size(handles.matching_spectrum_names,2)+1}=strcat(filename,'---',num2str(n-1));
             end
+            
+            %set up associated constants
             handles.ideal_multiplier(end+1)=1;
+            
+            %if this is the first ideal spectrum to be imported, set it as
+            %the active spectrum. Otherwise leave it as inactive
             if size(handles.match_active,2)==0 && n==2
                 handles.match_active(end+1)=1;
             else
                 handles.match_active(end+1)=0;            
             end
+            
+            %spline the data with the standardized wavelength
             data=spline(tempWave,InputData(:,n),handles.Wavelength);
-
             data(handles.Wavelength < min(tempWave))=0;
             data(handles.Wavelength > max(tempWave))=0;
 
-            if strcmp(handles.unit_type,'Unknown (Lux available)')==1% && size(handles.LED_active,2) == size(handles.LED_lux,2)
+            %apply lux if available to undo normalization of the data
+            if strcmp(handles.unit_type,'Unknown (Lux available)')==1
                 data=(data-min(data)) ./ (max(data)-min(data));
                 k=683;
 
@@ -905,9 +968,12 @@ if ischar(filename) %is a double (0) if cancel is slected or window closed
                 handles.current_unit_type='Spectral Irradiance (W*m^-2*nm^-1)';
             end   
 
+            %add processed data to the handle
             handles.match_data=[handles.match_data data'];
         end
 
+        %only allow optimization if both LED and ideal spectra have been
+        %imported
         if size(handles.LED_active(handles.LED_active==1),2) >= 1 && size(handles.match_active(handles.match_active==1),2)>=1
             set(handles.optimize_coefficients,'Enable','on') 
         end
@@ -931,62 +997,112 @@ function Untitled_1_Callback(hObject, eventdata, handles)
 % 
 %         f=handles.uvbbCCT(min(sqrt((handles.LUV_u(1)-handles.uvbbCCT(:,2)).^2+(handles.LUV_v(1)-handles.uvbbCCT(:,3)).^2)),1)
 
-function [f] = Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data)
+function [f] = Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data,Wave)
+    stepsize=Wave(2)-Wave(1);
+    k=683;
     if ratio(2) > (6/29)^3
        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
-             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
-             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+           f=sqrt((ideal_data(1)-(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*((k*stepsize*sum(xcmf*R.*x)/standard_X)^(1/3)-(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)))^2 ...
+             +(ideal_data(3)-200*((k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-(k*stepsize*sum(zcmf*R.*x)/standard_Z)^(1/3)))^2);
        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
-             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
-             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+           f=sqrt((ideal_data(1)-(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*k*stepsize*sum(xcmf*R.*x)/standard_X+.13793-(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)))^2 ...
+             +(ideal_data(3)-200*((k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-(k*stepsize*sum(zcmf*R.*x)/standard_Z)^(1/3)))^2);           
        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
-             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
-             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+           f=sqrt((ideal_data(1)-(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*k*stepsize*sum(xcmf*R.*x)/standard_X+.13793-(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)))^2 ...
+             +(ideal_data(3)-200*((k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-(7.7870*k*stepsize*sum(zcmf*R.*x)/standard_Z+.13793)))^2);           
        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
-             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
-             +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+           f=sqrt((ideal_data(1)-(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16))^2 ...
+             +(ideal_data(2)-500*((k*stepsize*sum(xcmf*R.*x)/standard_X)^(1/3)-(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)))^2 ...
+             +(ideal_data(3)-200*((k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-(7.7870*k*stepsize*sum(zcmf*R.*x)/standard_Z+.13793)))^2);           
        end      
     end
-
-    %(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)
-    %(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)
     if ratio(2) <= (6/29)^3
        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
-             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
-             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+           f=sqrt((ideal_data(1)-(116*(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-16))^2 ...
+             +(ideal_data(2)-500*((k*stepsize*sum(xcmf*R.*x)/standard_X)^(1/3)-(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-(k*stepsize*sum(zcmf*R.*x)/standard_Z)^(1/3)))^2);
        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
-             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
-             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+           f=sqrt((ideal_data(1)-(116*(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*k*stepsize*sum(xcmf*R.*x)/standard_X+.13793-(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-(k*stepsize*sum(zcmf*R.*x)/standard_Z)^(1/3)))^2);           
        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
-             +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
-             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+           f=sqrt((ideal_data(1)-(116*(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-16))^2 ...
+             +(ideal_data(2)-500*(7.7870*k*stepsize*sum(xcmf*R.*x)/standard_X+.13793-(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-(7.7870*k*stepsize*sum(zcmf*R.*x)/standard_Z+.13793)))^2);           
        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
-           f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
-             +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
-             +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+           f=sqrt((ideal_data(1)-(116*(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-16))^2 ...
+             +(ideal_data(2)-500*((k*stepsize*sum(xcmf*R.*x)/standard_X)^(1/3)-(7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)))^2 ...
+             +(ideal_data(3)-200*((7.7870*k*stepsize*sum(ycmf*R.*x)/standard_Y+.13793)-(7.7870*k*stepsize*sum(zcmf*R.*x)/standard_Z+.13793)))^2);           
        end         
-    end
+    end    
+%     if ratio(2) > (6/29)^3
+%        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+%              +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+%              +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+%              +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+%              +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+%              +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+%              +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+%        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-16))^2 ...
+%              +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(sum(ycmf*R.*x)/(standard_Y*801))^(1/3)))^2 ...
+%              +(ideal_data(3)-200*((sum(ycmf*R.*x)/(standard_Y*801))^(1/3)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+%        end      
+%     end
+%     if ratio(2) <= (6/29)^3
+%        if ratio(1) > (6/29)^3 && ratio(2) > (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+%              +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+%              +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) > (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+%              +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+%              +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(sum(zcmf*R.*x)/(standard_Z*801))^(1/3)))^2);           
+%        elseif ratio(1) <= (6/29)^3 && ratio(3) <= (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+%              +(ideal_data(2)-500*(7.7870*sum(xcmf*R.*x)/(standard_X*801)+.13793-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+%              +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+%        elseif ratio(1) > (6/29)^3 && ratio(3) <= (6/29)^3
+%            f=sqrt((ideal_data(1)-(116*(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-16))^2 ...
+%              +(ideal_data(2)-500*((sum(xcmf*R.*x)/(standard_X*801))^(1/3)-(7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)))^2 ...
+%              +(ideal_data(3)-200*((7.7870*sum(ycmf*R.*x)/(standard_Y*801)+.13793)-(7.7870*sum(zcmf*R.*x)/(standard_Z*801)+.13793)))^2);           
+%        end         
+%     end
 
 
-function [f] = LUV_dE_fun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data)
-
+function [f] = LUV_dE_fun(x,ratio,R,standard_Y,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data,Wave)
+ 
     %order matters sum(handles.ycmf*R.*x)!=sum(x.*handles.ycmf*R)
+    N=size(Wave,2);
+    k=683;
+    stepsize=Wave(2)-Wave(1);
     if  ratio(2)<=(6/29)^3
-       f=sqrt((ideal_data(1)-.01128*sum(ycmf*R.*x)).^2 ...
-       +(ideal_data(2)-.1466*sum(ycmf*R.*x)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
-       +(ideal_data(3)-.1466*sum(ycmf*R.*x)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2);
+       f=sqrt((ideal_data(1)-(29/3)^3/standard_Y*k*stepsize*sum(ycmf*R.*x)).^2 ...
+       +(ideal_data(2)-13*(29/3)^3/standard_Y*k*stepsize*sum(ycmf*R.*x)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+       +(ideal_data(3)-13*(29/3)^3/standard_Y*k*stepsize*sum(ycmf*R.*x)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2);
     else
-       f=sqrt((ideal_data(1)-2.69*(sum(ycmf*R.*x))^(1/3)-16).^2 ...
-       +(ideal_data(2)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
-       +(ideal_data(3)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2); 
-    end
+       f=sqrt((ideal_data(1)-(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16)).^2 ...
+       +(ideal_data(2)-13*(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+       +(ideal_data(3)-13*(116*(k*stepsize*sum(ycmf*R.*x)/standard_Y)^(1/3)-16)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2); 
+    end    
+    
+%     if  ratio(2)<=(6/29)^3
+%        f=sqrt((ideal_data(1)-.01128*sum(ycmf*R.*x)).^2 ...
+%        +(ideal_data(2)-.1466*sum(ycmf*R.*x)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+%        +(ideal_data(3)-.1466*sum(ycmf*R.*x)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2);
+%     else
+%        f=sqrt((ideal_data(1)-2.69*(sum(ycmf*R.*x))^(1/3)-16).^2 ...
+%        +(ideal_data(2)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(4*sum(xcmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_u)).^2 ...
+%        +(ideal_data(3)-13*(2.69*(sum(ycmf*R.*x))^(1/3)-16)*(9*sum(ycmf*R.*x)/(sum(xcmf*R.*x)+15*sum(ycmf*R.*x)+3*sum(zcmf*R.*x))-standard_v)).^2); 
+%     end
 
 % --- Executes on button press in optimize_coefficients.
 function optimize_coefficients_Callback(hObject, eventdata, handles)
@@ -1013,11 +1129,13 @@ xcmf=handles.xcmf;
 ycmf=handles.ycmf;
 zcmf=handles.zcmf;
 
+Wave=handles.Wavelength;
+
 ratio=[handles.X(1)/standard_X handles.Y(2)/standard_Y handles.Z(1)/standard_Z];
 
 options = optimoptions('fmincon','Algorithm','sqp','Display','off');%,'DerivativeCheck','on');
-
-x0=ones(1,size(handles.LED_active(handles.LED_active==1),2))*.5;
+%[2.1476 1.3684 72.2731 3.4866 21.0973];%
+x0=rand(1,size(handles.LED_active(handles.LED_active==1),2));
 lb=zeros(1,size(handles.LED_active(handles.LED_active==1),2));
 ub=ones(1,size(handles.LED_active(handles.LED_active==1),2));
 ub=ub.*handles.max_alpha;
@@ -1026,19 +1144,30 @@ ub=ub.*handles.max_alpha;
 % Lcorrect=handles.LUV_L(2);
 % Ucorrect=handles.LUV_u(2);
 % Vcorrect=handles.LUV_v(2);
+% uprime_correct=handles.LUV_u_prime(2);
+% vprime_correct=handles.LUV_v_prime(2);
 % 
+% stepsize=Wave(2)-Wave(1)
+% k=683;
+% 
+% uprime_test=4*sum(xcmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol));
+% vprime_test=9*sum(ycmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol));
 % if handles.Y(2)/100 <=(6/29)^3
-%     Ltest=.01128*sum(handles.ycmf*R.*sol);
-%     Utest=.1466*sum(handles.ycmf*R.*sol)*(4*sum(handles.xcmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_u);
-%     Vtest=.1466*sum(handles.ycmf*R.*sol)*(9*sum(handles.ycmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_v);
+%     q='one'
+%     Ltest=(29/3)^3*k*stepsize*sum(ycmf*R.*sol)/standard_Y;
+%     Utest=13*(29/3)^3/standard_Y*k*stepsize*sum(ycmf*R.*sol)*(4*sum(xcmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol))-standard_u);
+%     Vtest=13*(29/3)^3/standard_Y*k*stepsize*sum(ycmf*R.*sol)*(9*sum(ycmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol))-standard_v);
 % else
-%     Ltest=2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16;
-%     Utest=13*(2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16)*(4*sum(handles.xcmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_u);
-%     Vtest=13*(2.69*(sum(handles.ycmf*R.*sol))^(1/3)-16)*(9*sum(handles.ycmf*R.*sol)/(sum(handles.xcmf*R.*sol)+15*sum(handles.ycmf*R.*sol)+3*sum(handles.zcmf*R.*sol))-standard_v);
+%     q='two'
+%     Ltest=(k*stepsize/standard_Y)^(1/3)*116*sum(ycmf*R.*sol)^(1/3)-16;
+%     Utest=13*(116*(k*stepsize*sum(ycmf*R.*sol)/standard_Y)^(1/3)-16)*(4*sum(xcmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol))-standard_u);
+%     Vtest=13*(116*(k*stepsize*sum(ycmf*R.*sol)/standard_Y)^(1/3)-16)*(9*sum(ycmf*R.*sol)/(sum(xcmf*R.*sol)+15*sum(ycmf*R.*sol)+3*sum(zcmf*R.*sol))-standard_v);
 % end
-% t1=[Lcorrect Ltest]
+% t1=[Lcorrect Ltest 174.6847095*sum(ycmf*R.*sol)^(1/3)-16]
 % t2=[Ucorrect Utest]
 % t3=[Vcorrect Vtest]
+% t4=[uprime_correct uprime_test]
+% t5=[vprime_correct vprime_test]
 %%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
 %%%%%%%%%%%%%%%%%%%%%%%%%%Troubleshooting
 % x=handles.alpha(handles.LED_active==1);
@@ -1125,7 +1254,7 @@ if strcmp(handles.optimize_type,'Minimized LUV dE')==1
 
     %[x,fval]=fmincon('LUV_dE_fun',x0,[],[],[],[],lb,ub,[],options);
     ideal_data=[handles.LUV_L(1) handles.LUV_u(1) handles.LUV_v(1)];
-    f=@(x)LUV_dE_fun(x,ratio,R,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data);
+    f=@(x)LUV_dE_fun(x,ratio,R,standard_Y,standard_u,standard_v,xcmf,ycmf,zcmf,ideal_data,Wave);
     [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
     
     i=1;
@@ -1140,7 +1269,7 @@ end
 if strcmp(handles.optimize_type,'Minimized Lab dE76')==1
 
     ideal_data=[handles.Lab_L(1) handles.a(1) handles.b(1)];    
-    f=@(x)Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data);
+    f=@(x)Lab_dE76_fun(x,ratio,R,standard_X,standard_Y,standard_Z,xcmf,ycmf,zcmf,ideal_data,Wave);
     [x,fval]=fmincon(f,x0,[],[],[],[],lb,ub,[],options);
     
     i=1;
@@ -1251,6 +1380,7 @@ if strcmp(handles.CIE_space,'xyY')==1
     set(handles.LUV_plot,'Visible','Off')
     set(handles.Lab_plot,'Visible','Off')
     set(handles.UVW_plot,'Visible','Off')
+    set(handles.RGB_plot,'Visible','Off')
     
     axes(handles.xyY_plot)
     cla reset
@@ -1273,6 +1403,7 @@ if strcmp(handles.CIE_space,'LUV')==1
     set(handles.LUV_plot,'Visible','On')
     set(handles.Lab_plot,'Visible','Off')
     set(handles.UVW_plot,'Visible','Off')
+    set(handles.RGB_plot,'Visible','Off')
     
     axes(handles.LUV_plot)
     cla reset
@@ -1285,8 +1416,8 @@ if strcmp(handles.CIE_space,'LUV')==1
     scatter(handles.LUV_u_prime(2),handles.LUV_v_prime(2),70,'k','v','fill')
     
     legend('Ideal','Generated')
-    xlabel('u')
-    ylabel('v')
+    xlabel('u`')
+    ylabel('v`')
     hold off
 end
 
@@ -1295,6 +1426,7 @@ if strcmp(handles.CIE_space,'Lab')==1
     set(handles.LUV_plot,'Visible','Off')
     set(handles.Lab_plot,'Visible','On')
     set(handles.UVW_plot,'Visible','Off')
+    set(handles.RGB_plot,'Visible','Off')
     
     axes(handles.Lab_plot)
     cla reset
@@ -1306,10 +1438,46 @@ if strcmp(handles.CIE_space,'UVW')==1
     set(handles.LUV_plot,'Visible','Off')
     set(handles.Lab_plot,'Visible','Off')
     set(handles.UVW_plot,'Visible','On')
+    set(handles.RGB_plot,'Visible','Off')    
     
     axes(handles.UVW_plot)
     cla reset
 
+end
+
+if strcmp(handles.CIE_space,'RGB')==1
+    set(handles.xyY_plot,'Visible','Off')
+    set(handles.LUV_plot,'Visible','Off')
+    set(handles.Lab_plot,'Visible','Off')
+    set(handles.UVW_plot,'Visible','Off')
+    set(handles.RGB_plot,'Visible','On')    
+    
+    axes(handles.RGB_plot)
+    cla reset
+    
+    color_square=ones(1,2,3);
+    if handles.R(1) <= 255 && handles.R(1) >= 0 ...
+    && handles.G(1) <= 255 && handles.G(1) >= 0 ...
+    && handles.B(1) <= 255 && handles.B(1) >= 0 
+    color_square(:,1,1)=handles.R(1)/255;
+    color_square(:,1,2)=handles.G(1)/255;
+    color_square(:,1,3)=handles.B(1)/255;
+    
+    end
+    if handles.R(2) <= 255 && handles.R(2) >= 0 ...
+    && handles.G(2) <= 255 && handles.G(2) >= 0 ...
+    && handles.B(2) <= 255 && handles.B(2) >= 0     
+    color_square(:,2,1)=handles.R(2)/255;
+    color_square(:,2,2)=handles.G(2)/255;
+    color_square(:,2,3)=handles.B(2)/255;
+    end
+    imagesc([0 1],[0 1],color_square)
+
+    
+    
+%     X=k*sum(xcmf.*s')*(red(2,1)-red(1,1))
+%     Y=k*sum(ycmf.*s')*(red(2,1)-red(1,1))
+%     Z=k*sum(zcmf.*s')*(red(2,1)-red(1,1))
 end
 
 function [handles]=refresh(hObject,eventdata,handles)
@@ -1335,10 +1503,26 @@ function [handles]=refresh(hObject,eventdata,handles)
     if size(handles.match_data) >= 1
         s=handles.match_data(:,handles.match_active==1);
         s=s';
-        handles.X(1)=sum(handles.xcmf.*s)/size(s,2);
-        handles.Y(1)=sum(handles.ycmf.*s)/size(s,2);
-        handles.Z(1)=sum(handles.zcmf.*s)/size(s,2);
+        k=683;
+        handles.X(1)=k*sum(handles.xcmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
+        handles.Y(1)=k*sum(handles.ycmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
+        handles.Z(1)=k*sum(handles.zcmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
 
+%         handles.X(1)=sum(handles.xcmf.*s)/size(s,2);
+%         handles.Y(1)=sum(handles.ycmf.*s)/size(s,2);
+%         handles.Z(1)=sum(handles.zcmf.*s)/size(s,2);        
+        
+        RGB=handles.RGB_mat*[handles.X(1); handles.Y(1); handles.Z(1)];
+        max_RGB=max([RGB(1) RGB(2) RGB(3)]);
+        handles.RGB_brightness_mod(1)=1;
+        if max_RGB > 255
+            handles.RGB_brightness_mod(1)=255/max_RGB;
+        end
+        RGB=RGB*handles.RGB_brightness_mod(1);
+        handles.R(1)=RGB(1);
+        handles.G(1)=RGB(2);
+        handles.B(1)=RGB(3);
+        
         handles.x(1)=handles.X(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
         handles.y(1)=handles.Y(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
         
@@ -1410,10 +1594,26 @@ function [handles]=refresh(hObject,eventdata,handles)
         end
         handles.generated=sum(alpha_applied,2);        
         handles.generated=handles.generated';
+        k=683;
+        
+        handles.X(2)=k*sum(handles.xcmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));
+        handles.Y(2)=k*sum(handles.ycmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));
+        handles.Z(2)=k*sum(handles.zcmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));    
 
-        handles.X(2)=sum(handles.xcmf.*handles.generated)/size(handles.generated,2);
-        handles.Y(2)=sum(handles.ycmf.*handles.generated)/size(handles.generated,2);
-        handles.Z(2)=sum(handles.zcmf.*handles.generated)/size(handles.generated,2);
+%         handles.X(2)=sum(handles.xcmf.*handles.generated)/size(handles.generated,2);
+%         handles.Y(2)=sum(handles.ycmf.*handles.generated)/size(handles.generated,2);
+%         handles.Z(2)=sum(handles.zcmf.*handles.generated)/size(handles.generated,2);             
+        
+        RGB=handles.RGB_mat*[handles.X(2); handles.Y(2); handles.Z(2)];
+        max_RGB=max([RGB(1) RGB(2) RGB(3)]);
+        handles.RGB_brightness_mod(2)=1;
+        if max_RGB > 255
+            handles.RGB_brightness_mod(2)=255/max_RGB;
+        end
+        RGB=RGB*handles.RGB_brightness_mod(2);
+        handles.R(2)=RGB(1);
+        handles.G(2)=RGB(2);
+        handles.B(2)=RGB(3);        
         
         handles.x(2)=handles.X(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
         handles.y(2)=handles.Y(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
@@ -1539,22 +1739,22 @@ function [handles]=refresh(hObject,eventdata,handles)
     end
     
     if strcmp(handles.CIE_space,'xyY')==1
-        rowNames={'X','Y','Z','CCT','','x','y'};
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','x','y'};
         CIE_table_data={
           handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
           handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-          [] []; handles.x(1) handles.x(2);...
+          [] []; [] []; [] [];[] []; [] [] ;[] []; handles.x(1) handles.x(2);...
           handles.y(1) handles.y(2)};
 
         set(handles.CIE_table,'Data',CIE_table_data)  
         set(handles.CIE_table,'RowName',rowNames)
     end
     if strcmp(handles.CIE_space,'LUV')==1
-        rowNames={'X','Y','Z','CCT','','u`','v`','u*','v*','L*','dE'};
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','u`','v`','u*','v*','L*','dE'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; handles.LUV_u_prime(1) handles.LUV_u_prime(2);...
+        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.LUV_u_prime(1) handles.LUV_u_prime(2);...
         handles.LUV_v_prime(1) handles.LUV_v_prime(2);handles.LUV_u(1) handles.LUV_u(2);...
         handles.LUV_v(1) handles.LUV_v(2);handles.LUV_L(1) handles.LUV_L(2);...
         handles.LUV_dE [];};
@@ -1563,11 +1763,11 @@ function [handles]=refresh(hObject,eventdata,handles)
         set(handles.CIE_table,'Data',CIE_table_data)
     end
     if strcmp(handles.CIE_space,'Lab')==1
-        rowNames={'X','Y','Z','CCT','','L','a','b','dE76','dE94','dE00'};
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','L','a','b','dE76','dE94','dE00'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; handles.Lab_L(1) handles.Lab_L(2);...
+        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.Lab_L(1) handles.Lab_L(2);...
         handles.a(1) handles.a(2);handles.b(1) handles.b(2);handles.dE76 [];...
         handles.dE94 []; handles.dE00 [];};
   
@@ -1575,12 +1775,23 @@ function [handles]=refresh(hObject,eventdata,handles)
         set(handles.CIE_table,'Data',CIE_table_data)        
     end
     if strcmp(handles.CIE_space,'UVW')==1
-        rowNames={'X','Y','Z','CCT','','u','v','W'};
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','u','v','W'};
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; handles.UVW_u(1) handles.UVW_u(2);...
+        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.UVW_u(1) handles.UVW_u(2);...
         handles.UVW_v(1) handles.UVW_v(2); handles.W(1) handles.W(2)};
+  
+        set(handles.CIE_table,'RowName',rowNames)
+        set(handles.CIE_table,'Data',CIE_table_data)        
+    end    
+    if strcmp(handles.CIE_space,'RGB')==1
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','R','G','B','Mod'};
+        CIE_table_data={
+        handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
+        handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
+        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.R(1) handles.R(2);...
+        handles.G(1) handles.G(2); handles.B(1) handles.B(2); handles.RGB_brightness_mod(1) handles.RGB_brightness_mod(2)};
   
         set(handles.CIE_table,'RowName',rowNames)
         set(handles.CIE_table,'Data',CIE_table_data)        
