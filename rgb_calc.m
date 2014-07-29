@@ -88,6 +88,10 @@ X=k*sum(xcmf.*s')*(red(2,1)-red(1,1))
 Y=k*sum(ycmf.*s')*(red(2,1)-red(1,1))
 Z=k*sum(zcmf.*s')*(red(2,1)-red(1,1))
 
+ktest = 100./sum(s'.*cie1931xyz1nm(startval:endval,3));
+testXYZ(j,i) = ktest.*sum(CIETCS1nm(startvaltcs:endvaltcs,i+1).*cie1931xyz1nm(startval:endval,j+1).*testsourcespd(startvalts:endvalts,end));
+
+
 figure(3)
 hold on
 plot(Wavelength,red(:,2),'r')
