@@ -79,7 +79,7 @@ handles.LED_lux=[];
 handles.Ideal_lux=[];
 handles.match_data=[];
 handles.LED_data=[];
-handles.Wavelength=350:.5:850;
+handles.Wavelength=380:1:780;
 handles.max_alpha=1;
 handles.normalize=0;
 
@@ -104,6 +104,7 @@ handles.clean=1;
 
 options={
     'Least-Squares Spectrum Match';
+    'Least-Squares RGB Match' 
     'Minimized LUV dE';
     'Minimized Lab dE76'};
 set(handles.optimize_options,'string',options);
@@ -117,57 +118,49 @@ handles.unit_type='Spectral Power (W/m)';
 handles.current_unit_type='Spectral Power (W/m)';
 set(handles.current_unit_text,'string',handles.current_unit_type) 
 
-handles.illuminant_names=cellstr([
-    'A  ';
-    'D50';
-    'D55';
-    'D65';
-    'D75';
-    'E  ';
-    'F1 ';
-    'F2 ';
-    'F3 ';
-    'F4 ';
-    'F5 ';
-    'F6 ';
-    'F7 ';
-    'F8 ';
-    'F9 ';
-    'F10';
-    'F11';
-    'F12';]);
+%Import and set up required data for calculations
+temp=importdata('RequiredData/illuminants_xy_2deg.txt');
+handles.illuminant_data_xy_2deg=temp.data;
+handles.illuminant_names=temp.rowheaders;
+
 handles.standard_illuminant=[0.44757 0.40745];
 set(handles.reference_illuminant_popup,'string',handles.illuminant_names);
 
-%Import and set up required data for calculations
-handles.illuminant_data_xy_2deg=importdata('RequiredData/illuminants_xy_2deg.txt');
-handles.illuminant_data_xy_10deg=importdata('RequiredData/illuminants_xy_10deg.txt');
-handles.DSPD=importdata('RequiredData/DSPD.txt');
-handles.CIETCS1nm=importdata('RequiredData/CIETCS1nm.txt');
+temp=importdata('RequiredData/illuminants_xy_10deg.txt');
+handles.illuminant_data_xy_10deg=temp.data;
 
-temp=handles.Wavelength;
+load RequiredData/DSPD.mat
+handles.DSPD=DSPD;
+load RequiredData/CIETCS1nm.mat
+handles.CIETCS1nm=CIETCS1nm;
+
+temp=handles.Wavelength';
 for i=2:size(handles.DSPD,2)
     data=spline(handles.DSPD(:,1),handles.DSPD(:,i),handles.Wavelength);
     data(handles.Wavelength < min(handles.DSPD(:,1)))=0;
     data(handles.Wavelength > max(handles.DSPD(:,1)))=0;
-    temp=[temp data];
+    temp=[temp data'];
 end
 handles.DSPD=temp;
 
-temp=handles.Wavelength;
+temp=handles.Wavelength';
 for i=2:size(handles.CIETCS1nm,2)
     data=spline(handles.CIETCS1nm(:,1),handles.CIETCS1nm(:,i),handles.Wavelength);
     data(handles.Wavelength < min(handles.CIETCS1nm(:,1)))=0;
     data(handles.Wavelength > max(handles.CIETCS1nm(:,1)))=0;
-    temp=[temp data];
+    temp=[temp data'];
 end
 handles.CIETCS1nm=temp;
 
 %3 columns: kelvin, u, v with 1 kelvin resolution. Credit pspectro 
-handles.uvbbCCT=importdata('RequiredData/uvbbCCT.txt');
+load RequiredData/uvbbCCT.mat
+handles.uvbbCCT=uvbbCCT;
+%handles.uvbbCCT=importdata('RequiredData/uvbbCCT.txt');
 
 %http://www.cvrl.org/cmfs.htm
-cmf=importdata('RequiredData/xyz_cmf_2deg.txt');
+%cmf=importdata('RequiredData/xyz_cmf_2deg.txt');
+load RequiredData/cie1931xyz1nm.mat
+cmf=cie1931xyz1nm;
 
 xcmf=spline(cmf(:,1),cmf(:,2),handles.Wavelength);
 xcmf(handles.Wavelength < min(cmf(:,1)))=0;
@@ -205,6 +198,7 @@ handles.RGB_mat=[ 2.0413690 -0.5649464 -0.3446944;
 
 handles.x=[0 0];
 handles.y=[0 0];
+handles.z=[0 0];
 
 handles.LUV_u_prime=[0 0];
 handles.LUV_v_prime=[0 0];
@@ -1504,8 +1498,9 @@ end
 
 function [Ra,R] = get_cri1995(testsourcespd,referencesourcespd,cmf,CIETCS1nm,Wavelength)
     %calculate normalization constant k for perfect diffuse reflector of source
-    ktest = 100./sum(cmf(:,2).*testsourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
-    kref = 100./sum(cmf(:,2).*referencesourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
+    
+    ktest = 100./sum(cmf(:,2).*testsourcespd*(Wavelength(2)-Wavelength(1)));
+    kref = 100./sum(cmf(:,2).*referencesourcespd*(Wavelength(2)-Wavelength(1)));
 
     %Need have to apply von Kries chromatic adaptation 
     %first calculate c and d for both sources
@@ -1520,84 +1515,82 @@ function [Ra,R] = get_cri1995(testsourcespd,referencesourcespd,cmf,CIETCS1nm,Wav
     XYZreference_samples = zeros(3,15);    
     
     %XYZ, u', and v' coordinates of the test source itself
-    Xtest_source=ktest*sum(cmf(:,1).*testsourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
-    Ytest_source=ktest*sum(cmf(:,2).*testsourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
-    Ztest_source=ktest*sum(cmf(:,3).*testsourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
+    Xtest_source=ktest*sum(cmf(:,1).*testsourcespd*(Wavelength(2)-Wavelength(1)));
+    Ytest_source=ktest*sum(cmf(:,2).*testsourcespd*(Wavelength(2)-Wavelength(1)));
+    Ztest_source=ktest*sum(cmf(:,3).*testsourcespd*(Wavelength(2)-Wavelength(1)));
     Utest_source=4*Xtest_source./(Xtest_source+15*Ytest_source+3*Ztest_source);
-    Vtest_source=9*Ytest_source./(Xtest_source+15*Ytest_source+3*Ztest_source);
+    Vtest_source=6*Ytest_source./(Xtest_source+15*Ytest_source+3*Ztest_source);
     
     %XYZ, u', and v' coordinates of the reference source itself    
-    Xreference_source=kref*sum(cmf(:,1).*referencesourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
-    Yreference_source=kref*sum(cmf(:,2).*referencesourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
-    Zreference_source=kref*sum(cmf(:,3).*referencesourcespd(:,2)*(Wavelength(2)-Wavelength(1)));
+    Xreference_source=kref*sum(cmf(:,1).*referencesourcespd*(Wavelength(2)-Wavelength(1)));
+    Yreference_source=kref*sum(cmf(:,2).*referencesourcespd*(Wavelength(2)-Wavelength(1)));
+    Zreference_source=kref*sum(cmf(:,3).*referencesourcespd*(Wavelength(2)-Wavelength(1)));
     Ureference_source=4*Xreference_source./(Xreference_source+15*Yreference_source+3*Zreference_source);
-    Vreference_source=9*Yreference_source./(Xreference_source+15*Yreference_source+3*Zreference_source);    
+    Vreference_source=6*Yreference_source./(Xreference_source+15*Yreference_source+3*Zreference_source);    
     
     for j=1:size(cmf,2)
         for i=2:size(CIETCS1nm,2) %all 15 samples in CIETCS1nm
-            XYZtest_samples(j,i) = ktest.*sum(CIETCS1nm(:,i).*cmf(:,j).*testsourcespd(:,2));
+            XYZtest_samples(j,i-1) = ktest.*sum(CIETCS1nm(:,i).*cmf(:,j).*testsourcespd*(Wavelength(2)-Wavelength(1)));
         end
     end
 
     for j=1:size(cmf,2)
         for i=2:size(CIETCS1nm,2) %all 15 samples in CIETCS1nm
-            XYZreference_samples(j,i) = kref.*sum(CIETCS1nm(:,i).*cmf(:,j).*referencesourcespd(:,2));
+            XYZreference_samples(j,i-1) = kref.*sum(CIETCS1nm(:,i).*cmf(:,j).*referencesourcespd*(Wavelength(2)-Wavelength(1)));
         end
     end
 
     %UV coordinates of the 15 samples when they are illuminated by test and
     %reference sources respectively
     Ureference_samples=4*XYZreference_samples(1,:)./(XYZreference_samples(1,:)+15*XYZreference_samples(2,:)+3*XYZreference_samples(3,:));
-    Vreference_samples=9*XYZreference_samples(2,:)./(XYZreference_samples(1,:)+15*XYZreference_samples(2,:)+3*XYZreference_samples(3,:));
+    Vreference_samples=6*XYZreference_samples(2,:)./(XYZreference_samples(1,:)+15*XYZreference_samples(2,:)+3*XYZreference_samples(3,:));
     
     Utest_samples=4*XYZtest_samples(1,:)./(XYZtest_samples(1,:)+15*XYZtest_samples(2,:)+3*XYZtest_samples(3,:));
-    Vtest_samples=9*XYZtest_samples(2,:)./(XYZtest_samples(1,:)+15*XYZtest_samples(2,:)+3*XYZtest_samples(3,:));
-    
+    Vtest_samples=6*XYZtest_samples(2,:)./(XYZtest_samples(1,:)+15*XYZtest_samples(2,:)+3*XYZtest_samples(3,:)); 
     
     %next we need to calculate c and d coefficients for both sources, as well
     %as for the samples illuminated by the test source
-    Ctest_source=(4-Utest_source-10*Vtest_source)/Vtest_source;
-    Dtest_source=(1.708*Vtest_source+.404-1.481*Utest_source)/Vtest_source;
+    Ctest_source=(4-Utest_source-10*Vtest_source)./Vtest_source;
+    Dtest_source=(1.708*Vtest_source+.404-1.481*Utest_source)./Vtest_source;
 
     Creference_source=(4-Ureference_source-10*Vreference_source)/Vreference_source;
-    Dreference_source=(1.708*Vreference_source+.404-1.481*Ureference_source)/Vreference_source;
+    Dreference_source=(1.708*Vreference_source+.404-1.481*Ureference_source)./Vreference_source;
 
     Ctest_samples=(4-Utest_samples-10*Vtest_samples)./Vtest_samples;
-    Dtest_samples=(1.708*Vtest_samples+.404-1.481*Utest_samples)/Vtest_samples;
-
+    Dtest_samples=(1.708*Vtest_samples+.404-1.481*Utest_samples)./Vtest_samples;
+    
     %Recalculate the u and v coordinates of the samples illuminated by the
-    %test source, applying von kries chromatic adaptation
-        
+    %test source, applying von kries chromatic adaptation       
     Utest_samples=(10.872+.404*Ctest_samples.*(Creference_source./Ctest_source)-4*Dtest_samples.*(Dreference_source./Dtest_source))./ ...
                   (16.518+1.481*Ctest_samples.*(Creference_source./Ctest_source)-Dtest_samples.*(Dreference_source./Dtest_source));
     
     Vtest_samples=5.520./(16.518+1.481*Ctest_samples.*(Creference_source./Ctest_source)-Dtest_samples.*(Dreference_source./Dtest_source));
-
+     
     %calculate UVW for chromatically adapted object colors
     Wtest = 25.*(XYZtest_samples(2,:).^(1/3))-17;
     Utest = 13.*Wtest.*(Utest_samples-Ureference_source);
     Vtest = 13.*Wtest.*(Vtest_samples-Vreference_source);
-    UVWtest = horzcat(Utest,Vtest,Wtest);
+    %UVWtest = horzcat(Utest',Vtest',Wtest');
 
     %calculate UVW for reference illumance object colors
     Wref = 25.*(XYZtest_samples(2,:).^(1/3))-17;
     Uref = 13.*Wref.*(Ureference_samples-Ureference_source);
-    Vref = 13.*Wref.*(Vreference_samples-Vreference_source);
-    UVWref = horzcat(Uref,Vref,Wref);
-
-    deltaE = sqrt((UVWtest(:,1)-UVWref(:,1)).^2+(UVWtest(:,2)-UVWref(:,2)).^2+(UVWtest(:,3)-UVWref(:,3)).^2);
+    Vref = 13.*Wref.*(Vreference_samples-Vreference_source); 
+    %UVWref = horzcat(Uref',Vref',Wref');
+    
+    deltaE = sqrt((Wtest-Wref).^2+(Utest-Uref).^2+(Vtest-Vref).^2);
     R = 100-(4.6.*deltaE);
-    a=size(R)
-    Ra = (sum(R(1:8,:))/8);
+    Ra = (sum(R(:,1:8))/8);
 
 %credit pspectro
 function nrefspd = get_nrefspd(CCT,DSPD,Wavelength,normWavelength)
 
     %blackbody spd
     if CCT <= 5000
+        Wavelength_nm=Wavelength*10^-9;
         c1 = 3.7418e-16;
         c2 = 1.438775225e-2;
-        refspd = horzcat(Wavelength',c1./(Wavelength.^5.*(exp(c2./(Wavelength.*CCT))-1))');
+        refspd = horzcat(Wavelength',c1./(Wavelength_nm.^5.*(exp(c2./(Wavelength_nm.*CCT))-1))');
         
     %daylight spd    
     elseif CCT > 5000
@@ -1625,7 +1618,7 @@ function nrefspd = get_nrefspd(CCT,DSPD,Wavelength,normWavelength)
 %     endval = find(refspd(:,1) == max(range));
 
     %normalize spd around given wavelength
-    nrefspd = horzcat(Wavelength',1.*(refspd(:,2)./refspd(refspd(:,1) == normWavelength,2)));    
+    nrefspd = horzcat(Wavelength',1.*(refspd(:,2)./refspd(refspd(:,1) == normWavelength,2)));  
     
 function [handles]=refresh(hObject,eventdata,handles)
     set(handles.current_unit_text,'string',handles.current_unit_type) 
@@ -1651,10 +1644,12 @@ function [handles]=refresh(hObject,eventdata,handles)
         s=handles.match_data(:,handles.match_active==1);
         s=s';
         k=683;
+        %k = 100./sum(handles.ycmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
+
         handles.X(1)=k*sum(handles.xcmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
         handles.Y(1)=k*sum(handles.ycmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
-        handles.Z(1)=k*sum(handles.zcmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));
-
+        handles.Z(1)=k*sum(handles.zcmf.*s*(handles.Wavelength(2)-handles.Wavelength(1)));        
+        
 %         handles.X(1)=sum(handles.xcmf.*s)/size(s,2);
 %         handles.Y(1)=sum(handles.ycmf.*s)/size(s,2);
 %         handles.Z(1)=sum(handles.zcmf.*s)/size(s,2);        
@@ -1672,12 +1667,15 @@ function [handles]=refresh(hObject,eventdata,handles)
         
         handles.x(1)=handles.X(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
         handles.y(1)=handles.Y(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
+        handles.z(1)=handles.Z(1)/(handles.X(1)+handles.Y(1)+handles.Z(1));
         
         standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
-        standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+        standard_v=6*handles.standard_illuminant(2)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
         
-        handles.LUV_u_prime(1)=4*handles.X(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));
-        handles.LUV_v_prime(1)=9*handles.Y(1)/(handles.X(1)+15*handles.Y(1)+3*handles.Z(1));
+        handles.LUV_u_prime(1)=4*handles.x(1)/(-2*handles.x(1)+12*handles.y(1)+3);
+        
+        %wikipedia says "9*x", pspectro says "6*x"
+        handles.LUV_v_prime(1)=6*handles.y(1)/(-2*handles.x(1)+12*handles.y(1)+3);   
         
         handles.W(1)=25*(handles.Y(1)).^(1/3)-17;
         handles.UVW_u(1)=13*handles.W(1).*(handles.LUV_u_prime(1)-standard_u);
@@ -1706,10 +1704,10 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.cct(1) = handles.uvbbCCT(row,1);
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         nrefspd = get_nrefspd(handles.cct(1),handles.DSPD,handles.Wavelength,560);
-        cmf=[handles.xcmf handles.ycmf handles.zcmf];
-        [Ra,R] = get_cri1995(s,nrefspd,cmf,handles.CIETCS1nm,handles.Wavelength);
+        cmf=[handles.xcmf' handles.ycmf' handles.zcmf'];
+        [Ra,R] = get_cri1995(s',nrefspd(:,2),cmf,handles.CIETCS1nm,handles.Wavelength);
         
-        handles.CRI(1)=R;
+        handles.CRI(1)=Ra;
         
         if ratio1 > .008856
             f1=ratio1^(1/3);
@@ -1732,10 +1730,6 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.Lab_L(1)=116*f2-16;
         handles.a(1)=500*(f1-f2);
         handles.b(1)=200*(f2-f3);
-        
-        
-        
-        
     end
     
     if size(handles.LED_data) >= 1
@@ -1750,11 +1744,12 @@ function [handles]=refresh(hObject,eventdata,handles)
         handles.generated=sum(alpha_applied,2);        
         handles.generated=handles.generated';
         k=683;
-        
+        %k=100./sum(handles.ycmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));
+                
         handles.X(2)=k*sum(handles.xcmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));
         handles.Y(2)=k*sum(handles.ycmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));
         handles.Z(2)=k*sum(handles.zcmf.*handles.generated*(handles.Wavelength(2)-handles.Wavelength(1)));    
-
+        
 %         handles.X(2)=sum(handles.xcmf.*handles.generated)/size(handles.generated,2);
 %         handles.Y(2)=sum(handles.ycmf.*handles.generated)/size(handles.generated,2);
 %         handles.Z(2)=sum(handles.zcmf.*handles.generated)/size(handles.generated,2);             
@@ -1772,12 +1767,13 @@ function [handles]=refresh(hObject,eventdata,handles)
         
         handles.x(2)=handles.X(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
         handles.y(2)=handles.Y(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
-
-        handles.LUV_u_prime(2)=4*handles.X(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));
-        handles.LUV_v_prime(2)=9*handles.Y(2)/(handles.X(2)+15*handles.Y(2)+3*handles.Z(2));      
+        handles.z(2)=handles.Z(2)/(handles.X(2)+handles.Y(2)+handles.Z(2));
         
+        handles.LUV_u_prime(2)=4*handles.x(2)/(-2*handles.x(2)+12*handles.y(2)+3);
+        handles.LUV_v_prime(2)=6*handles.y(2)/(-2*handles.x(2)+12*handles.y(2)+3);      
+                
         standard_u=4*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
-        standard_v=6*handles.standard_illuminant(1)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
+        standard_v=6*handles.standard_illuminant(2)/(-2*handles.standard_illuminant(1)+12*handles.standard_illuminant(2)+3);
 
         handles.W(2)=25*(handles.Y(2)).^(1/3)-17;
         handles.UVW_u(2)=13*handles.W(2).*(handles.LUV_u_prime(2)-standard_u);
@@ -1805,11 +1801,14 @@ function [handles]=refresh(hObject,eventdata,handles)
 
         handles.cct(2) = handles.uvbbCCT(row,1);
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+        %handles.cct(2)=3623;
         nrefspd = get_nrefspd(handles.cct(2),handles.DSPD,handles.Wavelength,560);
+        %load nrefspd.mat
         cmf=[handles.xcmf' handles.ycmf' handles.zcmf'];
-        [Ra,R] = get_cri1995(handles.generated,nrefspd,cmf,handles.CIETCS1nm,handles.Wavelength);
-        
-        handles.CRI(2)=R;        
+        %save('nrefspd_actual','nrefspd')
+        [Ra,R] = get_cri1995(handles.generated',nrefspd(:,2),cmf,handles.CIETCS1nm,handles.Wavelength);
+
+        handles.CRI(2)=Ra;        
         
         if ratio1 > .008856
             f1=ratio1^(1/3);
@@ -1899,12 +1898,12 @@ function [handles]=refresh(hObject,eventdata,handles)
     end
     
     if strcmp(handles.CIE_space,'xyY')==1
-        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','x','y'};
+        rowNames={'X','Y','Z','CCT','CRI','CQS','CFI','CSI','CDI','','x','y','z'};
         CIE_table_data={
           handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
           handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-          [] []; [] []; [] [];[] []; [] [] ;[] []; handles.x(1) handles.x(2);...
-          handles.y(1) handles.y(2)};
+          handles.CRI(1) handles.CRI(2); [] []; [] [];[] []; [] [] ;[] []; handles.x(1) handles.x(2);...
+          handles.y(1) handles.y(2);handles.z(1) handles.z(2)};
 
         set(handles.CIE_table,'Data',CIE_table_data)  
         set(handles.CIE_table,'RowName',rowNames)
@@ -1914,7 +1913,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.LUV_u_prime(1) handles.LUV_u_prime(2);...
+        handles.CRI(1) handles.CRI(2); [] []; [] [];[] []; [] [] ;[] []; handles.LUV_u_prime(1) handles.LUV_u_prime(2);...
         handles.LUV_v_prime(1) handles.LUV_v_prime(2);handles.LUV_u(1) handles.LUV_u(2);...
         handles.LUV_v(1) handles.LUV_v(2);handles.LUV_L(1) handles.LUV_L(2);...
         handles.LUV_dE [];};
@@ -1927,7 +1926,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.Lab_L(1) handles.Lab_L(2);...
+        handles.CRI(1) handles.CRI(2); [] []; [] [];[] []; [] [] ;[] []; handles.Lab_L(1) handles.Lab_L(2);...
         handles.a(1) handles.a(2);handles.b(1) handles.b(2);handles.dE76 [];...
         handles.dE94 []; handles.dE00 [];};
   
@@ -1939,7 +1938,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.UVW_u(1) handles.UVW_u(2);...
+        handles.CRI(1) handles.CRI(2); [] []; [] [];[] []; [] [] ;[] []; handles.UVW_u(1) handles.UVW_u(2);...
         handles.UVW_v(1) handles.UVW_v(2); handles.W(1) handles.W(2)};
   
         set(handles.CIE_table,'RowName',rowNames)
@@ -1950,7 +1949,7 @@ function [handles]=refresh(hObject,eventdata,handles)
         CIE_table_data={
         handles.X(1) handles.X(2); handles.Y(1) handles.Y(2);...
         handles.Z(1) handles.Z(2);handles.cct(1) handles.cct(2);...
-        [] []; [] []; [] [];[] []; [] [] ;[] []; handles.R(1) handles.R(2);...
+        handles.CRI(1) handles.CRI(2); [] []; [] [];[] []; [] [] ;[] []; handles.R(1) handles.R(2);...
         handles.G(1) handles.G(2); handles.B(1) handles.B(2); handles.RGB_brightness_mod(1) handles.RGB_brightness_mod(2)};
   
         set(handles.CIE_table,'RowName',rowNames)

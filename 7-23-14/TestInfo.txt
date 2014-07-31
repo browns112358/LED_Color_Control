@@ -1,7 +1,0 @@
-TEST 1: compare calculated "generated" spectrum with spectrum actually produced by lights (same multipliers)
-ideal multiplier: .01, sky_shaded.txt
-RGBAW multipliers: 0.12037, 0.35208, 0.81796, 0.098766, 0.025159
-
-TEST 2: choose multipliers and apply them to the actual light. Take the spectrum of the light and show that the optimizer
-reproduces the exact multipliers when given the light.
-RGBAW multipliers: .8, .6, .1, .2, .3
